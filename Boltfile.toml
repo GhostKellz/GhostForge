@@ -1,0 +1,123 @@
+project = "ghostforge"
+
+# Base gaming runtime services for GhostForge
+[services.proton-runtime]
+build = "./containers/proton"
+gpu.nvidia = true
+gpu.amd = true
+privileged = true
+volumes = [
+    "./games:/games:rw",
+    "./wine-prefixes:/prefixes:rw",
+    "/tmp/.X11-unix:/tmp/.X11-unix:rw",
+    "/dev/dri:/dev/dri:rw",
+    "/run/user/1000/pulse:/run/user/1000/pulse:rw"
+]
+devices = ["/dev/input", "/dev/uinput"]
+env.DISPLAY = ":0"
+env.PULSE_RUNTIME_PATH = "/run/user/1000/pulse"
+env.WINE_PREFIX = "/prefixes/default"
+env.DXVK_ENABLE_NVAPI = "1"
+env.VKD3D_CONFIG = "dxr"
+
+# Steam compatibility layer
+[services.steam-runtime]
+build = "./containers/steam"
+gpu.nvidia = true
+gpu.amd = true
+volumes = [
+    "./steam:/steam:rw",
+    "./games:/games:rw",
+    "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+]
+env.STEAM_COMPAT_DATA_PATH = "/steam/steamapps/compatdata"
+env.STEAM_COMPAT_CLIENT_INSTALL_PATH = "/steam"
+
+# Performance monitoring and optimization
+[services.performance-monitor]
+build = "./containers/monitor"
+gpu.nvidia = true
+gpu.amd = true
+volumes = [
+    "/sys/class/drm:/sys/class/drm:ro",
+    "/proc:/host/proc:ro"
+]
+env.MONITORING_INTERVAL = "1000"
+env.MANGOHUD = "1"
+
+# Game management service
+[services.game-manager]
+build = "./src"
+ports = ["8090:8090"]
+volumes = ["./config:/config:rw"]
+env.BOLT_ENDPOINT = "unix:///var/run/bolt.sock"
+
+# Gaming networking optimizations
+[network]
+driver = "quic"
+encryption = true
+low_latency = true
+
+# Gaming storage configuration
+[storage.games]
+type = "zfs"
+size = "2Ti"
+compression = "lz4"
+snapshot_enabled = true
+
+[storage.prefixes]
+type = "overlay"
+size = "500Gi"
+snapshot_enabled = true
+snapshot_retention = "30d"
+
+[storage.saves]
+type = "backup"
+size = "100Gi"
+backup_enabled = true
+backup_interval = "6h"
+
+# Gaming capsule definitions
+[capsules."wine-base"]
+base = "ubuntu:22.04"
+packages = ["wine", "winetricks", "cabextract", "unzip"]
+gpu_support = true
+
+[capsules."proton-ge"]
+base = "wine-base"
+proton_version = "GE-Proton8-32"
+dxvk_enabled = true
+vkd3d_enabled = true
+
+[capsules."nvidia-gaming"]
+base = "proton-ge"
+gpu.nvidia = true
+packages = ["nvidia-driver-525", "vulkan-tools"]
+env.NVIDIA_DRIVER_CAPABILITIES = "all"
+
+[capsules."steam-runtime"]
+base = "valve/steam-runtime:latest"
+packages = ["steam"]
+gpu_support = true
+
+# Global gaming optimizations
+[runtime]
+scheduler = "gaming"
+cpu_governor = "performance"
+io_scheduler = "mq-deadline"
+swap_disabled = true
+transparent_hugepages = "never"
+
+# GPU optimization settings
+[gpu]
+power_management = "performance"
+memory_clock = "max"
+shader_cache_enabled = true
+vulkan_layers = ["VK_LAYER_MESA_overlay", "VK_LAYER_MANGOHUD_overlay"]
+
+# Audio optimization for gaming
+[audio]
+backend = "pipewire"
+latency = "32"
+sample_rate = "48000"
+channels = "stereo"

@@ -1,0 +1,107 @@
+
+[package]
+name = "ghostforge"
+version = "0.1.0"
+edition = "2024"
+authors = ["GhostForge Team <team@ghostforge.dev>"]
+description = "Next-generation Linux gaming platform - Better than Lutris with containers and AI"
+homepage = "https://ghostforge.dev"
+repository = "https://github.com/ghostforge/ghostforge"
+license = "GPL-3.0-or-later"
+keywords = ["gaming", "linux", "wine", "proton", "containers"]
+categories = ["games", "emulators"]
+
+[[bin]]
+name = "forge"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "cargo", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.40", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+dirs = "5.0"
+which = "6.0"
+regex = "1.10"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+indicatif = "0.17"
+colored = "2.1"
+dialoguer = "0.11"
+sha2 = "0.10"
+zip = "2.1"
+tar = "0.4"
+flate2 = "1.0"
+walkdir = "2.5"
+chrono = { version = "0.4", features = ["serde"] }
+futures-util = "0.3"
+
+# GUI dependencies
+eframe = { version = "0.29", optional = true }
+egui = { version = "0.29", optional = true }
+poll-promise = { version = "0.3", optional = true }  # Async state management for egui
+parking_lot = { version = "0.12", optional = true }  # Better synchronization
+
+# Better terminal UI
+ratatui = { version = "0.28", optional = true }
+crossterm = "0.28"
+
+# Container support
+bollard = { version = "0.16", optional = true }  # Docker API
+podman-api = { version = "0.10", optional = true }  # Podman API
+bolt = { git = "https://github.com/CK-Technology/bolt", optional = true }  # Bolt gaming containers
+
+# Authentication
+jsonwebtoken = { version = "9.0", optional = true }
+
+uuid = { version = "1.0", features = ["v4", "serde"] }
+blake3 = "1.5"
+
+# Database for game library
+rusqlite = { version = "0.32", features = ["bundled", "chrono"] }
+
+# System interaction
+sysinfo = "0.31"
+nix = { version = "0.29", features = ["process", "signal"] }
+
+# Wayland and display management
+wayland-client = { version = "0.31", optional = true }
+wayland-protocols = { version = "0.31", optional = true }
+smithay-client-toolkit = { version = "0.18", optional = true }
+drm = { version = "0.11", optional = true }
+libdrm-sys = { version = "0.7", optional = true }
+
+[features]
+default = ["cli", "gui", "container-bolt"]
+cli = []
+gui = ["dep:eframe", "dep:egui", "dep:poll-promise", "dep:parking_lot"]
+tui = ["dep:ratatui"]
+
+# Container runtime support - this is the REAL differentiator
+container-bolt = ["bolt"]             # Gaming-optimized runtime (preferred)
+container-docker = ["bollard"]
+container-podman = ["podman-api"]
+container-all = ["container-bolt", "container-podman", "container-docker"]
+
+# Authentication for cloud features
+auth = ["jsonwebtoken"]
+
+# Display and performance features
+wayland-gaming = ["dep:wayland-client", "dep:wayland-protocols", "dep:smithay-client-toolkit"]
+display-management = ["dep:drm", "dep:libdrm-sys"]
+gaming-performance = ["wayland-gaming", "display-management"]
+
+[dev-dependencies]
+tempfile = "3.10"
+mockall = "0.13"
+pretty_assertions = "1.4"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "z"
