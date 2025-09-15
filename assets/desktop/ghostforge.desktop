@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Name=GhostForge
+GenericName=Gaming Platform
+Comment=Next-generation Linux gaming platform - Better than Lutris with containers and AI
+Exec=forge
+Icon=ghostforge
+Terminal=false
+Type=Application
+Categories=Game;Emulator;
+Keywords=gaming;linux;wine;proton;containers;
+StartupNotify=true
+StartupWMClass=GhostForge
+

@@ -1,9 +1,9 @@
+use crate::game_launcher::{GameLauncher, LaunchOptions};
+use crate::protondb::ProtonDBTier;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use colored::*;
 use std::path::PathBuf;
-use crate::protondb::ProtonDBTier;
-use crate::game_launcher::{GameLauncher, LaunchOptions};
 
 #[derive(Parser)]
 #[command(
@@ -419,26 +419,37 @@ impl Cli {
         match self.command {
             Commands::Game { action } => handle_game_command(action).await,
             Commands::Wine { action } => handle_wine_command(action).await,
-            Commands::Launch { game, wine_version, args } => {
-                handle_launch(game, wine_version, args).await
-            }
-            Commands::Install { source, name, wine_version } => {
-                handle_install(source, name, wine_version).await
-            }
+            Commands::Launch {
+                game,
+                wine_version,
+                args,
+            } => handle_launch(game, wine_version, args).await,
+            Commands::Install {
+                source,
+                name,
+                wine_version,
+            } => handle_install(source, name, wine_version).await,
             Commands::Config { action } => handle_config_command(action).await,
             Commands::Launcher { action } => handle_launcher_command(action).await,
-            Commands::Tricks { game, trick, force } => {
-                handle_tricks(game, trick, force).await
-            }
-            Commands::Optimize { game, nvidia, amd, gamemode, cpu_performance } => {
-                handle_optimize(game, nvidia, amd, gamemode, cpu_performance).await
-            }
-            Commands::Search { query, protondb, local } => {
-                handle_search(query, protondb, local).await
-            }
-            Commands::Info { gpu, wine, vulkan, full } => {
-                handle_info(gpu, wine, vulkan, full).await
-            }
+            Commands::Tricks { game, trick, force } => handle_tricks(game, trick, force).await,
+            Commands::Optimize {
+                game,
+                nvidia,
+                amd,
+                gamemode,
+                cpu_performance,
+            } => handle_optimize(game, nvidia, amd, gamemode, cpu_performance).await,
+            Commands::Search {
+                query,
+                protondb,
+                local,
+            } => handle_search(query, protondb, local).await,
+            Commands::Info {
+                gpu,
+                wine,
+                vulkan,
+                full,
+            } => handle_info(gpu, wine, vulkan, full).await,
             Commands::Backup { action } => handle_backup_command(action).await,
             Commands::Battlenet { action } => handle_battlenet_command(action).await,
             Commands::Graphics { action } => handle_graphics_command(action).await,
@@ -450,7 +461,10 @@ impl Cli {
 
 async fn handle_game_command(action: GameCommands) -> Result<()> {
     match action {
-        GameCommands::List { launcher, status: _ } => {
+        GameCommands::List {
+            launcher,
+            status: _,
+        } => {
             println!("{}", "📮 Available Games:".bold().cyan());
 
             let config_dir = dirs::config_dir().unwrap().join("ghostforge");
@@ -460,7 +474,9 @@ async fn handle_game_command(action: GameCommands) -> Result<()> {
             let launchers = launcher_manager.detect_launchers()?;
 
             if launchers.is_empty() {
-                println!("No launchers detected. Run 'forge launcher list' to see available launchers.");
+                println!(
+                    "No launchers detected. Run 'forge launcher list' to see available launchers."
+                );
                 return Ok(());
             }
 
@@ -468,15 +484,24 @@ async fn handle_game_command(action: GameCommands) -> Result<()> {
 
             // Filter launchers if specific launcher requested
             let filtered_launchers: Vec<_> = if let Some(ref launcher_filter) = launcher {
-                launchers.into_iter()
-                    .filter(|l| l.name.to_lowercase().contains(&launcher_filter.to_lowercase()))
+                launchers
+                    .into_iter()
+                    .filter(|l| {
+                        l.name
+                            .to_lowercase()
+                            .contains(&launcher_filter.to_lowercase())
+                    })
                     .collect()
             } else {
                 launchers
             };
 
             for launcher_info in filtered_launchers {
-                println!("\n{} ({}):", launcher_info.name.bold().blue(), format!("{:?}", launcher_info.launcher_type).dimmed());
+                println!(
+                    "\n{} ({}):",
+                    launcher_info.name.bold().blue(),
+                    format!("{:?}", launcher_info.launcher_type).dimmed()
+                );
 
                 let games = match launcher_info.launcher_type {
                     crate::launcher::LauncherType::Steam => {
@@ -496,20 +521,40 @@ async fn handle_game_command(action: GameCommands) -> Result<()> {
                 } else {
                     for game in &games {
                         let status_icon = if game.installed { "✅" } else { "❌" };
-                        println!("  {} {} (ID: {})", status_icon, game.name.cyan(), game.id.yellow());
+                        println!(
+                            "  {} {} (ID: {})",
+                            status_icon,
+                            game.name.cyan(),
+                            game.id.yellow()
+                        );
                         if game.installed {
-                            println!("    Path: {}", game.install_path.display().to_string().dimmed());
+                            println!(
+                                "    Path: {}",
+                                game.install_path.display().to_string().dimmed()
+                            );
                         }
                     }
                     total_games += games.len();
                 }
             }
 
-            println!("\n{} {} games found", "📊".bold(), total_games.to_string().bold().green());
+            println!(
+                "\n{} {} games found",
+                "📊".bold(),
+                total_games.to_string().bold().green()
+            );
             Ok(())
         }
-        GameCommands::Add { path: _, name, wine_version: _ } => {
-            println!("{} {}", "✅".green(), format!("Added game: {}", name).bold());
+        GameCommands::Add {
+            path: _,
+            name,
+            wine_version: _,
+        } => {
+            println!(
+                "{} {}",
+                "✅".green(),
+                format!("Added game: {}", name).bold()
+            );
             Ok(())
         }
         GameCommands::Remove { game, purge: _ } => {
@@ -545,7 +590,9 @@ async fn handle_wine_command(action: WineCommands) -> Result<()> {
                 match manager.list_available().await {
                     Ok(available_versions) => {
                         if available_versions.is_empty() {
-                            println!("  No versions available for download (check internet connection)");
+                            println!(
+                                "  No versions available for download (check internet connection)"
+                            );
                         } else {
                             for version in &available_versions[..10.min(available_versions.len())] {
                                 let type_icon = match version.wine_type {
@@ -554,7 +601,12 @@ async fn handle_wine_command(action: WineCommands) -> Result<()> {
                                     crate::wine::WineType::WineStaging => "🍷",
                                     _ => "📦",
                                 };
-                                println!("  {} {} ({})", type_icon, version.name.green(), format!("{:?}", version.wine_type).dimmed());
+                                println!(
+                                    "  {} {} ({})",
+                                    type_icon,
+                                    version.name.green(),
+                                    format!("{:?}", version.wine_type).dimmed()
+                                );
                             }
                             if available_versions.len() > 10 {
                                 println!("  ... and {} more", available_versions.len() - 10);
@@ -569,18 +621,22 @@ async fn handle_wine_command(action: WineCommands) -> Result<()> {
                     Ok(installed_versions) => {
                         if installed_versions.is_empty() {
                             println!("  No Wine/Proton versions installed");
-                            println!("  Use 'forge wine list --available' to see downloadable versions");
+                            println!(
+                                "  Use 'forge wine list --available' to see downloadable versions"
+                            );
                         } else {
                             for version in &installed_versions {
                                 let type_icon = match version.wine_type {
-                                    crate::wine::WineType::Proton | crate::wine::WineType::ProtonGE => "🚀",
+                                    crate::wine::WineType::Proton
+                                    | crate::wine::WineType::ProtonGE => "🚀",
                                     crate::wine::WineType::Wine => "🍷",
                                     crate::wine::WineType::WineStaging => "🍾",
                                     crate::wine::WineType::Lutris => "🎮",
                                     _ => "📦",
                                 };
                                 let system_marker = if version.system { " (system)" } else { "" };
-                                println!("  {} {} {} {}",
+                                println!(
+                                    "  {} {} {} {}",
                                     type_icon,
                                     version.name.cyan(),
                                     format!("v{}", version.version).yellow(),
@@ -588,7 +644,10 @@ async fn handle_wine_command(action: WineCommands) -> Result<()> {
                                 );
                                 println!("    Architecture: {}", version.arch.join(", ").dimmed());
                                 if !version.system {
-                                    println!("    Path: {}", version.path.display().to_string().dimmed());
+                                    println!(
+                                        "    Path: {}",
+                                        version.path.display().to_string().dimmed()
+                                    );
                                 }
                             }
                         }
@@ -621,16 +680,22 @@ async fn handle_wine_command(action: WineCommands) -> Result<()> {
     }
 }
 
-async fn handle_launch(game: String, wine_version: Option<String>, args: Vec<String>) -> Result<()> {
+async fn handle_launch(
+    game: String,
+    wine_version: Option<String>,
+    args: Vec<String>,
+) -> Result<()> {
     let config = crate::config::Config::load()?;
     config.ensure_directories()?;
     let game_lib = crate::game::GameLibrary::new(&config.paths.database)?;
     let launcher = GameLauncher::new(config);
 
     // Find the game in the database
-    let game_obj = if let Some(found_game) = game_lib.search_games(&game)?
+    let game_obj = if let Some(found_game) = game_lib
+        .search_games(&game)?
         .into_iter()
-        .find(|g| g.name.to_lowercase() == game.to_lowercase()) {
+        .find(|g| g.name.to_lowercase() == game.to_lowercase())
+    {
         found_game
     } else {
         return Err(anyhow::anyhow!(
@@ -657,7 +722,9 @@ async fn handle_launch(game: String, wine_version: Option<String>, args: Vec<Str
             let protondb = crate::protondb::ProtonDBClient::new();
             if let Ok(compat_report) = protondb.get_compatibility_info(appid).await {
                 println!("  🌐 ProtonDB rating: {:?}", compat_report.tier);
-                if compat_report.tier == ProtonDBTier::Silver || compat_report.tier == ProtonDBTier::Bronze {
+                if compat_report.tier == ProtonDBTier::Silver
+                    || compat_report.tier == ProtonDBTier::Bronze
+                {
                     println!("  ⚠️  This game may require tweaks for optimal performance");
                 }
             }
@@ -669,7 +736,7 @@ async fn handle_launch(game: String, wine_version: Option<String>, args: Vec<Str
         Ok(pid) => {
             println!("✅ {} launched successfully (PID: {})", game_obj.name, pid);
             Ok(())
-        },
+        }
         Err(e) => {
             println!("❌ Failed to launch {}: {}", game_obj.name, e);
             Err(e)
@@ -677,7 +744,11 @@ async fn handle_launch(game: String, wine_version: Option<String>, args: Vec<Str
     }
 }
 
-async fn handle_install(source: String, name: Option<String>, _wine_version: Option<String>) -> Result<()> {
+async fn handle_install(
+    source: String,
+    name: Option<String>,
+    _wine_version: Option<String>,
+) -> Result<()> {
     println!("{} Installing from: {}", "📦", source.yellow());
     if let Some(n) = name {
         println!("  Game name: {}", n);
@@ -695,34 +766,117 @@ async fn handle_config_command(action: ConfigCommands) -> Result<()> {
 
             // General settings
             println!("{}", "General:".bold());
-            println!("  Default Wine Version: {}", config.general.default_wine_version.yellow());
-            println!("  Enable GameMode: {}", if config.general.enable_gamemode { "✅ Yes".green() } else { "❌ No".red() });
-            println!("  Enable MangoHud: {}", if config.general.enable_mangohud { "✅ Yes".green() } else { "❌ No".red() });
-            println!("  Enable DXVK: {}", if config.general.enable_dxvk { "✅ Yes".green() } else { "❌ No".red() });
-            println!("  Enable VKD3D: {}", if config.general.enable_vkd3d { "✅ Yes".green() } else { "❌ No".red() });
+            println!(
+                "  Default Wine Version: {}",
+                config.general.default_wine_version.yellow()
+            );
+            println!(
+                "  Enable GameMode: {}",
+                if config.general.enable_gamemode {
+                    "✅ Yes".green()
+                } else {
+                    "❌ No".red()
+                }
+            );
+            println!(
+                "  Enable MangoHud: {}",
+                if config.general.enable_mangohud {
+                    "✅ Yes".green()
+                } else {
+                    "❌ No".red()
+                }
+            );
+            println!(
+                "  Enable DXVK: {}",
+                if config.general.enable_dxvk {
+                    "✅ Yes".green()
+                } else {
+                    "❌ No".red()
+                }
+            );
+            println!(
+                "  Enable VKD3D: {}",
+                if config.general.enable_vkd3d {
+                    "✅ Yes".green()
+                } else {
+                    "❌ No".red()
+                }
+            );
             println!("  Log Level: {}", config.general.log_level.cyan());
             println!();
 
             // Wine settings
             println!("{}", "Wine:".bold());
-            println!("  Default Prefix Path: {}", config.wine.default_prefix_path.display().to_string().yellow());
-            println!("  Wine Versions Path: {}", config.wine.wine_versions_path.display().to_string().yellow());
-            println!("  Default Architecture: {}", config.wine.default_arch.cyan());
-            println!("  Default Windows Version: {}", config.wine.default_windows_version.cyan());
+            println!(
+                "  Default Prefix Path: {}",
+                config
+                    .wine
+                    .default_prefix_path
+                    .display()
+                    .to_string()
+                    .yellow()
+            );
+            println!(
+                "  Wine Versions Path: {}",
+                config
+                    .wine
+                    .wine_versions_path
+                    .display()
+                    .to_string()
+                    .yellow()
+            );
+            println!(
+                "  Default Architecture: {}",
+                config.wine.default_arch.cyan()
+            );
+            println!(
+                "  Default Windows Version: {}",
+                config.wine.default_windows_version.cyan()
+            );
             println!();
 
             // GPU settings
             println!("{}", "GPU:".bold());
-            println!("  NVIDIA Prime Render Offload: {}", if config.gpu.nvidia_prime_render_offload { "✅ Yes".green() } else { "❌ No".red() });
-            println!("  Enable DLSS: {}", if config.gpu.enable_dlss { "✅ Yes".green() } else { "❌ No".red() });
-            println!("  Enable Ray Tracing: {}", if config.gpu.enable_ray_tracing { "✅ Yes".green() } else { "❌ No".red() });
+            println!(
+                "  NVIDIA Prime Render Offload: {}",
+                if config.gpu.nvidia_prime_render_offload {
+                    "✅ Yes".green()
+                } else {
+                    "❌ No".red()
+                }
+            );
+            println!(
+                "  Enable DLSS: {}",
+                if config.gpu.enable_dlss {
+                    "✅ Yes".green()
+                } else {
+                    "❌ No".red()
+                }
+            );
+            println!(
+                "  Enable Ray Tracing: {}",
+                if config.gpu.enable_ray_tracing {
+                    "✅ Yes".green()
+                } else {
+                    "❌ No".red()
+                }
+            );
             println!();
 
             // Paths
             println!("{}", "Paths:".bold());
-            println!("  Games Library: {}", config.paths.games_library.display().to_string().yellow());
-            println!("  Downloads: {}", config.paths.downloads.display().to_string().yellow());
-            println!("  Database: {}", config.paths.database.display().to_string().yellow());
+            println!(
+                "  Games Library: {}",
+                config.paths.games_library.display().to_string().yellow()
+            );
+            println!(
+                "  Downloads: {}",
+                config.paths.downloads.display().to_string().yellow()
+            );
+            println!(
+                "  Database: {}",
+                config.paths.database.display().to_string().yellow()
+            );
             println!();
 
             Ok(())
@@ -732,35 +886,35 @@ async fn handle_config_command(action: ConfigCommands) -> Result<()> {
                 "wine.default_version" => {
                     config.general.default_wine_version = value.clone();
                     true
-                },
+                }
                 "general.gamemode" => {
                     config.general.enable_gamemode = value.parse().unwrap_or(false);
                     true
-                },
+                }
                 "general.mangohud" => {
                     config.general.enable_mangohud = value.parse().unwrap_or(false);
                     true
-                },
+                }
                 "general.dxvk" => {
                     config.general.enable_dxvk = value.parse().unwrap_or(true);
                     true
-                },
+                }
                 "general.vkd3d" => {
                     config.general.enable_vkd3d = value.parse().unwrap_or(false);
                     true
-                },
+                }
                 "gpu.nvidia_prime" => {
                     config.gpu.nvidia_prime_render_offload = value.parse().unwrap_or(false);
                     true
-                },
+                }
                 "gpu.dlss" => {
                     config.gpu.enable_dlss = value.parse().unwrap_or(true);
                     true
-                },
+                }
                 "gpu.ray_tracing" => {
                     config.gpu.enable_ray_tracing = value.parse().unwrap_or(true);
                     true
-                },
+                }
                 "wine.default_arch" => {
                     if value == "win32" || value == "win64" {
                         config.wine.default_arch = value.clone();
@@ -769,7 +923,7 @@ async fn handle_config_command(action: ConfigCommands) -> Result<()> {
                         println!("❌ Invalid architecture. Use 'win32' or 'win64'");
                         false
                     }
-                },
+                }
                 _ => {
                     println!("❌ Unknown configuration key: {}", key);
                     println!("Available keys:");
@@ -783,7 +937,13 @@ async fn handle_config_command(action: ConfigCommands) -> Result<()> {
             if updated {
                 config.save()?;
                 println!("✅ Set {} = {}", key.cyan(), value.green());
-                println!("Configuration saved to: {}", crate::config::Config::config_path().display().to_string().dimmed());
+                println!(
+                    "Configuration saved to: {}",
+                    crate::config::Config::config_path()
+                        .display()
+                        .to_string()
+                        .dimmed()
+                );
             }
 
             Ok(())
@@ -813,7 +973,13 @@ async fn handle_config_command(action: ConfigCommands) -> Result<()> {
                 let default_config = crate::config::Config::default();
                 default_config.save()?;
                 println!("✅ Configuration reset to defaults");
-                println!("Configuration file: {}", crate::config::Config::config_path().display().to_string().dimmed());
+                println!(
+                    "Configuration file: {}",
+                    crate::config::Config::config_path()
+                        .display()
+                        .to_string()
+                        .dimmed()
+                );
             } else {
                 println!("⚠️ This will reset ALL configuration to defaults.");
                 println!("Use --yes to confirm the reset.");
@@ -837,9 +1003,15 @@ async fn handle_launcher_command(action: LauncherCommands) -> Result<()> {
                         println!("  No launchers detected");
                         println!("\n💡 Supported launchers:");
                         println!("  • Steam - Install from your distribution's package manager");
-                        println!("  • Battle.net - Use 'forge battlenet setup' to create a Wine prefix");
-                        println!("  • Epic Games - Use 'forge launcher setup epic' or install Heroic Games Launcher");
-                        println!("  • GOG Galaxy - Use 'forge launcher setup gog' or install Minigalaxy");
+                        println!(
+                            "  • Battle.net - Use 'forge battlenet setup' to create a Wine prefix"
+                        );
+                        println!(
+                            "  • Epic Games - Use 'forge launcher setup epic' or install Heroic Games Launcher"
+                        );
+                        println!(
+                            "  • GOG Galaxy - Use 'forge launcher setup gog' or install Minigalaxy"
+                        );
                         println!("  • Ubisoft Connect - Use 'forge launcher setup ubisoft'");
                         println!("  • EA App - Use 'forge launcher setup ea'");
                     } else {
@@ -857,17 +1029,24 @@ async fn handle_launcher_command(action: LauncherCommands) -> Result<()> {
                                 crate::launcher::LauncherType::Custom => "🔧",
                             };
 
-                            println!("  {} {} {} ({})",
+                            println!(
+                                "  {} {} {} ({})",
                                 status_icon,
                                 launcher_icon,
                                 launcher.name.bold().cyan(),
                                 format!("{:?}", launcher.launcher_type).dimmed()
                             );
 
-                            println!("    Executable: {}", launcher.executable.display().to_string().dimmed());
+                            println!(
+                                "    Executable: {}",
+                                launcher.executable.display().to_string().dimmed()
+                            );
 
                             if let Some(ref wine_prefix) = launcher.wine_prefix {
-                                println!("    Wine Prefix: {}", wine_prefix.display().to_string().dimmed());
+                                println!(
+                                    "    Wine Prefix: {}",
+                                    wine_prefix.display().to_string().dimmed()
+                                );
                                 if let Some(ref wine_version) = launcher.wine_version {
                                     println!("    Wine Version: {}", wine_version.dimmed());
                                 }
@@ -878,31 +1057,43 @@ async fn handle_launcher_command(action: LauncherCommands) -> Result<()> {
                                 println!("    Game Paths:");
                                 for path in &launcher.games_path {
                                     let exists_marker = if path.exists() { "✓" } else { "✗" };
-                                    println!("      {} {}", exists_marker, path.display().to_string().dimmed());
+                                    println!(
+                                        "      {} {}",
+                                        exists_marker,
+                                        path.display().to_string().dimmed()
+                                    );
                                 }
                             }
                             println!();
                         }
 
-                        println!("📊 {} launcher(s) detected", launchers.len().to_string().bold().green());
+                        println!(
+                            "📊 {} launcher(s) detected",
+                            launchers.len().to_string().bold().green()
+                        );
 
                         // Show which ones have games available
                         let mut games_available = 0;
                         for launcher in &launchers {
                             let game_count = match launcher.launcher_type {
-                                crate::launcher::LauncherType::Steam => {
-                                    launcher_manager.sync_steam_games(launcher).map(|games| games.len()).unwrap_or(0)
-                                }
-                                crate::launcher::LauncherType::BattleNet => {
-                                    launcher_manager.sync_battlenet_games(launcher).map(|games| games.len()).unwrap_or(0)
-                                }
+                                crate::launcher::LauncherType::Steam => launcher_manager
+                                    .sync_steam_games(launcher)
+                                    .map(|games| games.len())
+                                    .unwrap_or(0),
+                                crate::launcher::LauncherType::BattleNet => launcher_manager
+                                    .sync_battlenet_games(launcher)
+                                    .map(|games| games.len())
+                                    .unwrap_or(0),
                                 _ => 0,
                             };
                             games_available += game_count;
                         }
 
                         if games_available > 0 {
-                            println!("🎮 {} games available across all launchers", games_available.to_string().bold().blue());
+                            println!(
+                                "🎮 {} games available across all launchers",
+                                games_available.to_string().bold().blue()
+                            );
                             println!("💡 Use 'forge game list' to see all games");
                         }
                     }
@@ -921,7 +1112,8 @@ async fn handle_launcher_command(action: LauncherCommands) -> Result<()> {
             let config = crate::config::Config::load()?;
             config.ensure_directories()?;
             let game_lib = crate::game::GameLibrary::new(&config.paths.database)?;
-            let launcher_manager = crate::launcher::LauncherManager::new(config.paths.cache.clone());
+            let launcher_manager =
+                crate::launcher::LauncherManager::new(config.paths.cache.clone());
 
             if !launcher.is_empty() {
                 println!("🔄 Syncing games from {}...", launcher.cyan());
@@ -930,7 +1122,10 @@ async fn handle_launcher_command(action: LauncherCommands) -> Result<()> {
             } else {
                 println!("🔄 Syncing games from all detected launchers...");
                 let imported = launcher_manager.import_all_games(&game_lib).await?;
-                println!("\n✅ Successfully imported {} games", imported.to_string().bold().green());
+                println!(
+                    "\n✅ Successfully imported {} games",
+                    imported.to_string().bold().green()
+                );
 
                 if imported > 0 {
                     println!("Use 'forge game list' to see your imported games");
@@ -948,7 +1143,10 @@ async fn handle_launcher_command(action: LauncherCommands) -> Result<()> {
 async fn handle_tricks(game: String, trick: String, _force: bool) -> Result<()> {
     use crate::winetricks::WinetricksManager;
 
-    let cache_dir = dirs::cache_dir().unwrap().join("ghostforge").join("winetricks");
+    let cache_dir = dirs::cache_dir()
+        .unwrap()
+        .join("ghostforge")
+        .join("winetricks");
     let manager = WinetricksManager::new(cache_dir)?;
 
     // For demo purposes, use a default prefix path
@@ -969,7 +1167,11 @@ async fn handle_tricks(game: String, trick: String, _force: bool) -> Result<()> 
         }
         _ => {
             if let Some(verb) = manager.get_verb_info(&trick) {
-                println!("Installing {} for {}...", verb.description.magenta(), game.cyan());
+                println!(
+                    "Installing {} for {}...",
+                    verb.description.magenta(),
+                    game.cyan()
+                );
                 manager.install_verb(&prefix_path, &verb).await?;
             } else {
                 println!("❌ Unknown trick: {}", trick);
@@ -992,7 +1194,7 @@ async fn handle_optimize(
     nvidia: bool,
     amd: bool,
     gamemode: bool,
-    cpu_performance: bool
+    cpu_performance: bool,
 ) -> Result<()> {
     println!("{}", "⚡ Applying optimizations...".bold().yellow());
     if nvidia {
@@ -1031,14 +1233,26 @@ async fn handle_info(gpu: bool, wine: bool, vulkan: bool, full: bool) -> Result<
 
                 println!("\n💻 CPU:");
                 println!("  Model: {}", system_info.cpu.brand.cyan());
-                println!("  Cores: {} ({} threads)", system_info.cpu.cores, system_info.cpu.threads);
+                println!(
+                    "  Cores: {} ({} threads)",
+                    system_info.cpu.cores, system_info.cpu.threads
+                );
                 println!("  Frequency: {} MHz", system_info.cpu.frequency);
 
                 println!("\n💾 Memory:");
-                println!("  Total: {:.2} GB", system_info.memory.total as f64 / 1024.0 / 1024.0 / 1024.0);
-                println!("  Available: {:.2} GB", system_info.memory.available as f64 / 1024.0 / 1024.0 / 1024.0);
+                println!(
+                    "  Total: {:.2} GB",
+                    system_info.memory.total as f64 / 1024.0 / 1024.0 / 1024.0
+                );
+                println!(
+                    "  Available: {:.2} GB",
+                    system_info.memory.available as f64 / 1024.0 / 1024.0 / 1024.0
+                );
                 if system_info.memory.swap_total > 0 {
-                    println!("  Swap: {:.2} GB", system_info.memory.swap_total as f64 / 1024.0 / 1024.0 / 1024.0);
+                    println!(
+                        "  Swap: {:.2} GB",
+                        system_info.memory.swap_total as f64 / 1024.0 / 1024.0 / 1024.0
+                    );
                 }
             }
 
@@ -1054,7 +1268,13 @@ async fn handle_info(gpu: bool, wine: bool, vulkan: bool, full: bool) -> Result<
                             crate::utils::GpuVendor::Intel => "🔵",
                             _ => "⚪",
                         };
-                        println!("  {} GPU {}: {} ({:?})", vendor_icon, i + 1, gpu_info.name.bold().cyan(), gpu_info.vendor);
+                        println!(
+                            "  {} GPU {}: {} ({:?})",
+                            vendor_icon,
+                            i + 1,
+                            gpu_info.name.bold().cyan(),
+                            gpu_info.vendor
+                        );
 
                         if let Some(ref driver) = gpu_info.driver {
                             println!("    Driver: {}", driver.green());
@@ -1064,7 +1284,11 @@ async fn handle_info(gpu: bool, wine: bool, vulkan: bool, full: bool) -> Result<
                             println!("    VRAM: {} GB", vram / 1024 / 1024 / 1024);
                         }
 
-                        let vulkan_status = if gpu_info.vulkan_support { "✅" } else { "❌" };
+                        let vulkan_status = if gpu_info.vulkan_support {
+                            "✅"
+                        } else {
+                            "❌"
+                        };
                         let dxvk_status = if gpu_info.dxvk_support { "✅" } else { "❌" };
                         println!("    Vulkan: {} | DXVK: {}", vulkan_status, dxvk_status);
                     }
@@ -1101,12 +1325,22 @@ async fn handle_info(gpu: bool, wine: bool, vulkan: bool, full: bool) -> Result<
                         println!("  Version: {}", version.yellow());
                     }
                     if !system_info.wine_support.architecture.is_empty() {
-                        println!("  Architecture: {}", system_info.wine_support.architecture.join(", ").cyan());
+                        println!(
+                            "  Architecture: {}",
+                            system_info.wine_support.architecture.join(", ").cyan()
+                        );
                     }
-                    let multilib_status = if system_info.wine_support.multilib_support { "✅ Yes" } else { "❌ No" };
+                    let multilib_status = if system_info.wine_support.multilib_support {
+                        "✅ Yes"
+                    } else {
+                        "❌ No"
+                    };
                     println!("  Multilib: {}", multilib_status);
                     if let Some(ref prefix_path) = system_info.wine_support.prefix_path {
-                        println!("  Default Prefix: {}", prefix_path.display().to_string().dimmed());
+                        println!(
+                            "  Default Prefix: {}",
+                            prefix_path.display().to_string().dimmed()
+                        );
                     }
                 } else {
                     println!("  Status: {} Not installed", "❌".red());
@@ -1125,9 +1359,18 @@ async fn handle_info(gpu: bool, wine: bool, vulkan: bool, full: bool) -> Result<
                 let winetricks_status = if tools.winetricks { "✅" } else { "❌" };
                 let protontricks_status = if tools.protontricks { "✅" } else { "❌" };
 
-                println!("  DXVK: {} | VKD3D: {} | MangoHUD: {}", dxvk_status, vkd3d_status, mangohud_status);
-                println!("  GameMode: {} | GameScope: {}", gamemode_status, gamescope_status);
-                println!("  Winetricks: {} | Protontricks: {}", winetricks_status, protontricks_status);
+                println!(
+                    "  DXVK: {} | VKD3D: {} | MangoHUD: {}",
+                    dxvk_status, vkd3d_status, mangohud_status
+                );
+                println!(
+                    "  GameMode: {} | GameScope: {}",
+                    gamemode_status, gamescope_status
+                );
+                println!(
+                    "  Winetricks: {} | Protontricks: {}",
+                    winetricks_status, protontricks_status
+                );
 
                 // Show container runtime information
                 if full {
@@ -1136,9 +1379,14 @@ async fn handle_info(gpu: bool, wine: bool, vulkan: bool, full: bool) -> Result<
                     match crate::container::ContainerManager::new(config_dir) {
                         Ok(container_manager) => {
                             let runtime_info = container_manager.get_runtime_info();
-                            println!("  Current: {} {}",
+                            println!(
+                                "  Current: {} {}",
                                 runtime_info.current_runtime.cyan(),
-                                if runtime_info.bolt_optimized { "(gaming-optimized)".green() } else { "".normal() }
+                                if runtime_info.bolt_optimized {
+                                    "(gaming-optimized)".green()
+                                } else {
+                                    "".normal()
+                                }
                             );
 
                             if !runtime_info.available_runtimes.is_empty() {
@@ -1151,7 +1399,10 @@ async fn handle_info(gpu: bool, wine: bool, vulkan: bool, full: bool) -> Result<
                             }
                         }
                         Err(e) => {
-                            println!("  ❌ Container runtime detection failed: {}", e.to_string().red());
+                            println!(
+                                "  ❌ Container runtime detection failed: {}",
+                                e.to_string().red()
+                            );
                         }
                     }
                 }
@@ -1205,31 +1456,45 @@ async fn handle_backup_command(action: BackupCommands) -> Result<()> {
 }
 
 async fn handle_battlenet_command(action: BattlenetCommands) -> Result<()> {
-    use crate::winetricks::WinetricksManager;
     use crate::utils::SystemDetector;
+    use crate::winetricks::WinetricksManager;
 
     match action {
-        BattlenetCommands::Setup { wine_version, prefix, game } => {
+        BattlenetCommands::Setup {
+            wine_version,
+            prefix,
+            game,
+        } => {
             let prefix_path = prefix
                 .map(|p| PathBuf::from(p))
                 .unwrap_or_else(|| dirs::home_dir().unwrap().join("Games/battlenet"));
 
-            println!("🍷 Setting up Battle.net prefix at: {}", prefix_path.display());
+            println!(
+                "🍷 Setting up Battle.net prefix at: {}",
+                prefix_path.display()
+            );
 
-            let cache_dir = dirs::cache_dir().unwrap().join("ghostforge").join("winetricks");
+            let cache_dir = dirs::cache_dir()
+                .unwrap()
+                .join("ghostforge")
+                .join("winetricks");
             let manager = WinetricksManager::new(cache_dir)?;
 
             match game.as_deref() {
                 Some("wow") => {
                     println!("🐉 Setting up World of Warcraft optimized prefix...");
-                    crate::winetricks::setup_wow_prefix(&prefix_path, wine_version.as_deref()).await?;
+                    crate::winetricks::setup_wow_prefix(&prefix_path, wine_version.as_deref())
+                        .await?;
                 }
                 Some("diablo") => {
                     println!("⚔️  Setting up Diablo optimized prefix...");
-                    crate::winetricks::setup_diablo_prefix(&prefix_path, wine_version.as_deref()).await?;
+                    crate::winetricks::setup_diablo_prefix(&prefix_path, wine_version.as_deref())
+                        .await?;
                 }
                 _ => {
-                    manager.create_battlenet_prefix(&prefix_path, wine_version.as_deref()).await?;
+                    manager
+                        .create_battlenet_prefix(&prefix_path, wine_version.as_deref())
+                        .await?;
                 }
             }
         }
@@ -1240,7 +1505,10 @@ async fn handle_battlenet_command(action: BattlenetCommands) -> Result<()> {
                 .unwrap_or_else(|| dirs::home_dir().unwrap().join("Games/battlenet"));
 
             println!("📦 Installing Battle.net essentials...");
-            let cache_dir = dirs::cache_dir().unwrap().join("ghostforge").join("winetricks");
+            let cache_dir = dirs::cache_dir()
+                .unwrap()
+                .join("ghostforge")
+                .join("winetricks");
             let manager = WinetricksManager::new(cache_dir)?;
 
             manager.install_battlenet_essentials(&prefix_path).await?;
@@ -1252,16 +1520,19 @@ async fn handle_battlenet_command(action: BattlenetCommands) -> Result<()> {
                 .unwrap_or_else(|| dirs::home_dir().unwrap().join("Games/battlenet"));
 
             println!("🐉 Optimizing prefix for World of Warcraft...");
-            let cache_dir = dirs::cache_dir().unwrap().join("ghostforge").join("winetricks");
+            let cache_dir = dirs::cache_dir()
+                .unwrap()
+                .join("ghostforge")
+                .join("winetricks");
             let manager = WinetricksManager::new(cache_dir)?;
 
             manager.optimize_for_wow(&prefix_path).await?;
         }
 
         BattlenetCommands::Download { output } => {
-            let download_dir = output
-                .map(|p| PathBuf::from(p))
-                .unwrap_or_else(|| dirs::download_dir().unwrap_or_else(|| dirs::home_dir().unwrap().join("Downloads")));
+            let download_dir = output.map(|p| PathBuf::from(p)).unwrap_or_else(|| {
+                dirs::download_dir().unwrap_or_else(|| dirs::home_dir().unwrap().join("Downloads"))
+            });
 
             println!("📥 Downloading Battle.net installer...");
             println!("Installer will be saved to: {}", download_dir.display());
@@ -1292,7 +1563,10 @@ async fn handle_battlenet_command(action: BattlenetCommands) -> Result<()> {
                     for game in games {
                         println!("  • {} ({})", game.name.cyan(), game.launcher_id.yellow());
                         println!("    Path: {}", game.install_path.display());
-                        println!("    Installed: {}", if game.installed { "✅" } else { "❌" });
+                        println!(
+                            "    Installed: {}",
+                            if game.installed { "✅" } else { "❌" }
+                        );
                     }
                 }
             } else {
@@ -1308,12 +1582,19 @@ async fn handle_battlenet_command(action: BattlenetCommands) -> Result<()> {
 async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
     use crate::graphics::GraphicsManager;
 
-    let base_dir = dirs::data_dir().unwrap().join("ghostforge").join("graphics");
+    let base_dir = dirs::data_dir()
+        .unwrap()
+        .join("ghostforge")
+        .join("graphics");
     let mut manager = GraphicsManager::new(base_dir)?;
     manager.set_dry_run(true); // Safe default
 
     match action {
-        GraphicsCommands::List { available, dxvk, vkd3d } => {
+        GraphicsCommands::List {
+            available,
+            dxvk,
+            vkd3d,
+        } => {
             if available {
                 println!("📥 Available Graphics Layers:");
 
@@ -1321,7 +1602,11 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
                     println!("\n🔷 DXVK (DirectX 9/10/11 → Vulkan):");
                     let dxvk_versions = manager.list_available_dxvk().await?;
                     for layer in &dxvk_versions[..5.min(dxvk_versions.len())] {
-                        println!("  • {} - APIs: {}", layer.name.cyan(), layer.supported_apis.join(", "));
+                        println!(
+                            "  • {} - APIs: {}",
+                            layer.name.cyan(),
+                            layer.supported_apis.join(", ")
+                        );
                     }
                 }
 
@@ -1329,7 +1614,11 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
                     println!("\n🔶 VKD3D-Proton (DirectX 12 → Vulkan):");
                     let vkd3d_versions = manager.list_available_vkd3d().await?;
                     for layer in &vkd3d_versions[..5.min(vkd3d_versions.len())] {
-                        println!("  • {} - APIs: {}", layer.name.yellow(), layer.supported_apis.join(", "));
+                        println!(
+                            "  • {} - APIs: {}",
+                            layer.name.yellow(),
+                            layer.supported_apis.join(", ")
+                        );
                     }
                 }
             } else {
@@ -1337,7 +1626,9 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
                 let installed = manager.list_installed()?;
 
                 if installed.is_empty() {
-                    println!("No graphics layers installed. Use 'forge graphics list --available' to see available versions.");
+                    println!(
+                        "No graphics layers installed. Use 'forge graphics list --available' to see available versions."
+                    );
                 } else {
                     for layer in installed {
                         println!("  • {} at {}", layer.name.green(), layer.path.display());
@@ -1352,18 +1643,30 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
             // For demo, show what would be installed
             if layer.contains("dxvk") {
                 let versions = manager.list_available_dxvk().await?;
-                if let Some(found) = versions.iter().find(|v| v.version.contains(&layer) || v.name.to_lowercase().contains(&layer.to_lowercase())) {
+                if let Some(found) = versions.iter().find(|v| {
+                    v.version.contains(&layer)
+                        || v.name.to_lowercase().contains(&layer.to_lowercase())
+                }) {
                     println!("Found: {}", found.name);
-                    println!("🔄 [DRY RUN] Would download from: {}", found.download_url.as_ref().unwrap_or(&"N/A".to_string()));
+                    println!(
+                        "🔄 [DRY RUN] Would download from: {}",
+                        found.download_url.as_ref().unwrap_or(&"N/A".to_string())
+                    );
                     println!("✅ [SIMULATED] {} installed successfully", found.name);
                 } else {
                     println!("❌ DXVK version '{}' not found", layer);
                 }
             } else if layer.contains("vkd3d") {
                 let versions = manager.list_available_vkd3d().await?;
-                if let Some(found) = versions.iter().find(|v| v.version.contains(&layer) || v.name.to_lowercase().contains(&layer.to_lowercase())) {
+                if let Some(found) = versions.iter().find(|v| {
+                    v.version.contains(&layer)
+                        || v.name.to_lowercase().contains(&layer.to_lowercase())
+                }) {
                     println!("Found: {}", found.name);
-                    println!("🔄 [DRY RUN] Would download from: {}", found.download_url.as_ref().unwrap_or(&"N/A".to_string()));
+                    println!(
+                        "🔄 [DRY RUN] Would download from: {}",
+                        found.download_url.as_ref().unwrap_or(&"N/A".to_string())
+                    );
                     println!("✅ [SIMULATED] {} installed successfully", found.name);
                 } else {
                     println!("❌ VKD3D version '{}' not found", layer);
@@ -1371,14 +1674,20 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
             }
         }
 
-        GraphicsCommands::Apply { layer_type, prefix, version: _ } => {
+        GraphicsCommands::Apply {
+            layer_type,
+            prefix,
+            version: _,
+        } => {
             let _prefix_path = PathBuf::from(&prefix);
 
             match layer_type.to_lowercase().as_str() {
                 "dxvk" => {
                     println!("🔧 Applying DXVK to prefix: {}", prefix.cyan());
                     println!("🔄 [DRY RUN] Would copy DXVK DLLs to prefix");
-                    println!("🔄 [DRY RUN] Would set DLL overrides for: d3d9, d3d10core, d3d11, dxgi");
+                    println!(
+                        "🔄 [DRY RUN] Would set DLL overrides for: d3d9, d3d10core, d3d11, dxgi"
+                    );
                     println!("✅ [SIMULATED] DXVK applied successfully");
                 }
                 "vkd3d" => {
@@ -1388,7 +1697,10 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
                     println!("✅ [SIMULATED] VKD3D-Proton applied successfully");
                 }
                 _ => {
-                    println!("❌ Unknown layer type: {}. Use 'dxvk' or 'vkd3d'", layer_type);
+                    println!(
+                        "❌ Unknown layer type: {}. Use 'dxvk' or 'vkd3d'",
+                        layer_type
+                    );
                 }
             }
         }
@@ -1408,12 +1720,18 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
                     println!("✅ [SIMULATED] VKD3D removed successfully");
                 }
                 "all" => {
-                    println!("🗑️ Removing all graphics layers from prefix: {}", prefix.cyan());
+                    println!(
+                        "🗑️ Removing all graphics layers from prefix: {}",
+                        prefix.cyan()
+                    );
                     println!("🔄 [DRY RUN] Would remove DXVK and VKD3D");
                     println!("✅ [SIMULATED] All graphics layers removed");
                 }
                 _ => {
-                    println!("❌ Unknown layer type: {}. Use 'dxvk', 'vkd3d', or 'all'", layer_type);
+                    println!(
+                        "❌ Unknown layer type: {}. Use 'dxvk', 'vkd3d', or 'all'",
+                        layer_type
+                    );
                 }
             }
         }
@@ -1425,13 +1743,19 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
             // Simulate checking what's installed
             println!("🔍 Checking prefix...");
 
-            if prefix_path.join("drive_c/windows/system32/d3d11.dll").exists() {
+            if prefix_path
+                .join("drive_c/windows/system32/d3d11.dll")
+                .exists()
+            {
                 println!("  ✅ DXVK: Installed (d3d9, d3d10core, d3d11, dxgi)");
             } else {
                 println!("  ❌ DXVK: Not installed");
             }
 
-            if prefix_path.join("drive_c/windows/system32/d3d12.dll").exists() {
+            if prefix_path
+                .join("drive_c/windows/system32/d3d12.dll")
+                .exists()
+            {
                 println!("  ✅ VKD3D-Proton: Installed (d3d12, dxcore)");
             } else {
                 println!("  ❌ VKD3D-Proton: Not installed");
@@ -1465,7 +1789,9 @@ async fn handle_graphics_command(action: GraphicsCommands) -> Result<()> {
                 }
             }
 
-            println!("\n💡 Tip: Always test both layers to see which performs best for your system!");
+            println!(
+                "\n💡 Tip: Always test both layers to see which performs best for your system!"
+            );
         }
     }
 

@@ -1,8 +1,8 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceMetrics {
@@ -33,7 +33,7 @@ pub struct PerformanceProfile {
     pub low_metrics: PerformanceMetrics,
     pub sample_count: u64,
     pub session_duration_minutes: f32,
-    pub stability_score: f32, // 0.0 - 1.0
+    pub stability_score: f32,    // 0.0 - 1.0
     pub optimization_score: f32, // 0.0 - 1.0
     pub bottlenecks: Vec<PerformanceBottleneck>,
 }
@@ -77,10 +77,10 @@ pub struct PerformanceTarget {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum QualityPreset {
-    Performance,  // High FPS, lower quality
-    Balanced,     // Balance between FPS and quality
-    Quality,      // High quality, acceptable FPS
-    Ultra,        // Maximum quality, FPS secondary
+    Performance, // High FPS, lower quality
+    Balanced,    // Balance between FPS and quality
+    Quality,     // High quality, acceptable FPS
+    Ultra,       // Maximum quality, FPS secondary
 }
 
 impl Default for PerformanceTarget {
@@ -164,24 +164,21 @@ impl PerformanceMonitor {
             // Parse CPU model
             for line in cpu_info.lines() {
                 if line.starts_with("Model name:") {
-                    hw_info.cpu_model = line.split(':').nth(1)
+                    hw_info.cpu_model = line
+                        .split(':')
+                        .nth(1)
                         .unwrap_or("Unknown")
                         .trim()
                         .to_string();
                 }
                 if line.starts_with("CPU(s):") {
-                    if let Ok(threads) = line.split(':').nth(1)
-                        .unwrap_or("1")
-                        .trim()
-                        .parse::<u32>() {
+                    if let Ok(threads) = line.split(':').nth(1).unwrap_or("1").trim().parse::<u32>()
+                    {
                         hw_info.cpu_threads = threads;
                     }
                 }
                 if line.starts_with("Core(s) per socket:") {
-                    if let Ok(cores) = line.split(':').nth(1)
-                        .unwrap_or("1")
-                        .trim()
-                        .parse::<u32>() {
+                    if let Ok(cores) = line.split(':').nth(1).unwrap_or("1").trim().parse::<u32>() {
                         hw_info.cpu_cores = cores;
                     }
                 }
@@ -189,9 +186,7 @@ impl PerformanceMonitor {
         }
 
         // Detect RAM
-        if let Ok(output) = std::process::Command::new("free")
-            .args(&["-m"])
-            .output() {
+        if let Ok(output) = std::process::Command::new("free").args(&["-m"]).output() {
             let mem_info = String::from_utf8_lossy(&output.stdout);
             for line in mem_info.lines() {
                 if line.starts_with("Mem:") {
@@ -207,8 +202,12 @@ impl PerformanceMonitor {
 
         // Detect GPU info (NVIDIA)
         if let Ok(output) = std::process::Command::new("nvidia-smi")
-            .args(&["--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"])
-            .output() {
+            .args(&[
+                "--query-gpu=name,driver_version,memory.total",
+                "--format=csv,noheader,nounits",
+            ])
+            .output()
+        {
             if output.status.success() {
                 let gpu_info = String::from_utf8_lossy(&output.stdout);
                 let parts: Vec<&str> = gpu_info.trim().split(", ").collect();
@@ -225,13 +224,16 @@ impl PerformanceMonitor {
         // Detect storage type
         if let Ok(output) = std::process::Command::new("lsblk")
             .args(&["-d", "-o", "NAME,ROTA"])
-            .output() {
+            .output()
+        {
             let storage_info = String::from_utf8_lossy(&output.stdout);
             for line in storage_info.lines().skip(1) {
-                if line.contains("0") { // Non-rotating = SSD/NVME
+                if line.contains("0") {
+                    // Non-rotating = SSD/NVME
                     hw_info.storage_type = StorageType::SSD;
                     break;
-                } else if line.contains("1") { // Rotating = HDD
+                } else if line.contains("1") {
+                    // Rotating = HDD
                     hw_info.storage_type = StorageType::HDD;
                 }
             }
@@ -253,7 +255,10 @@ impl PerformanceMonitor {
     }
 
     pub async fn start_monitoring(&mut self) -> Result<()> {
-        println!("🔍 Starting performance monitoring for game: {}", self.game_id);
+        println!(
+            "🔍 Starting performance monitoring for game: {}",
+            self.game_id
+        );
 
         // Start metrics collection in background
         let sender = self.metrics_sender.clone();
@@ -266,7 +271,10 @@ impl PerformanceMonitor {
         Ok(())
     }
 
-    async fn collect_metrics_loop(sender: mpsc::UnboundedSender<PerformanceMetrics>, _game_id: String) {
+    async fn collect_metrics_loop(
+        sender: mpsc::UnboundedSender<PerformanceMetrics>,
+        _game_id: String,
+    ) {
         let mut interval = tokio::time::interval(Duration::from_millis(1000)); // 1 Hz
         let mut frame_times = Vec::new();
         let mut last_frame_time = Instant::now();
@@ -285,7 +293,11 @@ impl PerformanceMonitor {
             }
 
             let avg_frame_time = frame_times.iter().sum::<f32>() / frame_times.len() as f32;
-            let fps = if avg_frame_time > 0.0 { 1000.0 / avg_frame_time } else { 0.0 };
+            let fps = if avg_frame_time > 0.0 {
+                1000.0 / avg_frame_time
+            } else {
+                0.0
+            };
 
             // Collect system metrics
             let metrics = match Self::collect_system_metrics(fps, avg_frame_time).await {
@@ -329,10 +341,11 @@ impl PerformanceMonitor {
         if let Ok(output) = tokio::process::Command::new("nvidia-smi")
             .args(&[
                 "--query-gpu=utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
-                "--format=csv,noheader,nounits"
+                "--format=csv,noheader,nounits",
             ])
             .output()
-            .await {
+            .await
+        {
             if output.status.success() {
                 let gpu_data = String::from_utf8_lossy(&output.stdout);
                 let parts: Vec<&str> = gpu_data.trim().split(", ").collect();
@@ -350,7 +363,8 @@ impl PerformanceMonitor {
         if let Ok(output) = tokio::process::Command::new("top")
             .args(&["-bn1", "-p1"])
             .output()
-            .await {
+            .await
+        {
             let top_output = String::from_utf8_lossy(&output.stdout);
             for line in top_output.lines() {
                 if line.starts_with("%Cpu(s):") {
@@ -369,7 +383,8 @@ impl PerformanceMonitor {
         if let Ok(output) = tokio::process::Command::new("free")
             .args(&["-m"])
             .output()
-            .await {
+            .await
+        {
             let mem_info = String::from_utf8_lossy(&output.stdout);
             for line in mem_info.lines() {
                 if line.starts_with("Mem:") {
@@ -406,7 +421,8 @@ impl PerformanceMonitor {
     async fn update_overlay(&self) -> Result<()> {
         if let Some(latest_metrics) = self.metrics_history.last() {
             // This would integrate with the UI overlay system
-            println!("FPS: {:.1} | Frame Time: {:.1}ms | GPU: {:.1}% | RAM: {}MB",
+            println!(
+                "FPS: {:.1} | Frame Time: {:.1}ms | GPU: {:.1}% | RAM: {}MB",
                 latest_metrics.fps,
                 latest_metrics.frame_time_ms,
                 latest_metrics.gpu_usage_percent,
@@ -493,15 +509,25 @@ impl PerformanceMonitor {
     }
 
     fn find_peak_metrics(&self) -> PerformanceMetrics {
-        self.metrics_history.iter()
-            .max_by(|a, b| a.fps.partial_cmp(&b.fps).unwrap_or(std::cmp::Ordering::Equal))
+        self.metrics_history
+            .iter()
+            .max_by(|a, b| {
+                a.fps
+                    .partial_cmp(&b.fps)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .cloned()
             .unwrap_or_else(|| self.metrics_history[0].clone())
     }
 
     fn find_low_metrics(&self) -> PerformanceMetrics {
-        self.metrics_history.iter()
-            .min_by(|a, b| a.fps.partial_cmp(&b.fps).unwrap_or(std::cmp::Ordering::Equal))
+        self.metrics_history
+            .iter()
+            .min_by(|a, b| {
+                a.fps
+                    .partial_cmp(&b.fps)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .cloned()
             .unwrap_or_else(|| self.metrics_history[0].clone())
     }
@@ -514,12 +540,18 @@ impl PerformanceMonitor {
         let fps_values: Vec<f32> = self.metrics_history.iter().map(|m| m.fps).collect();
         let mean_fps = fps_values.iter().sum::<f32>() / fps_values.len() as f32;
 
-        let variance = fps_values.iter()
+        let variance = fps_values
+            .iter()
             .map(|fps| (*fps - mean_fps).powi(2))
-            .sum::<f32>() / fps_values.len() as f32;
+            .sum::<f32>()
+            / fps_values.len() as f32;
 
         let std_dev = variance.sqrt();
-        let coefficient_of_variation = if mean_fps > 0.0 { std_dev / mean_fps } else { 1.0 };
+        let coefficient_of_variation = if mean_fps > 0.0 {
+            std_dev / mean_fps
+        } else {
+            1.0
+        };
 
         // Lower coefficient of variation = higher stability
         (1.0 - coefficient_of_variation.min(1.0)).max(0.0)
@@ -552,7 +584,8 @@ impl PerformanceMonitor {
                 1.0
             } else {
                 (100.0 - avg_metrics.gpu_temperature_c) / 20.0
-            }.max(0.0);
+            }
+            .max(0.0);
             score += temp_score;
             factors += 1;
         }
@@ -564,7 +597,11 @@ impl PerformanceMonitor {
         }
     }
 
-    fn identify_bottlenecks(&self, avg_metrics: &PerformanceMetrics, _peak_metrics: &PerformanceMetrics) -> Vec<PerformanceBottleneck> {
+    fn identify_bottlenecks(
+        &self,
+        avg_metrics: &PerformanceMetrics,
+        _peak_metrics: &PerformanceMetrics,
+    ) -> Vec<PerformanceBottleneck> {
         let mut bottlenecks = Vec::new();
 
         // GPU bottleneck detection
@@ -580,7 +617,9 @@ impl PerformanceMonitor {
 
         // VRAM bottleneck
         if avg_metrics.gpu_memory_total_mb > 0 {
-            let vram_usage = (avg_metrics.gpu_memory_used_mb as f32 / avg_metrics.gpu_memory_total_mb as f32) * 100.0;
+            let vram_usage = (avg_metrics.gpu_memory_used_mb as f32
+                / avg_metrics.gpu_memory_total_mb as f32)
+                * 100.0;
             if vram_usage > 90.0 {
                 bottlenecks.push(PerformanceBottleneck {
                     component: SystemComponent::VRAM,
@@ -598,7 +637,8 @@ impl PerformanceMonitor {
                 component: SystemComponent::CPU,
                 severity: BottleneckSeverity::Medium,
                 description: "CPU usage consistently above 90%".to_string(),
-                recommendation: "Close background applications or lower CPU-intensive settings".to_string(),
+                recommendation: "Close background applications or lower CPU-intensive settings"
+                    .to_string(),
                 confidence: 0.8,
             });
         }
@@ -620,7 +660,8 @@ impl PerformanceMonitor {
                 component: SystemComponent::GPU, // Most likely GPU related for gaming
                 severity: BottleneckSeverity::Critical,
                 description: format!("Average FPS below 30 ({:.1})", avg_metrics.fps),
-                recommendation: "Significantly lower graphics settings or upgrade hardware".to_string(),
+                recommendation: "Significantly lower graphics settings or upgrade hardware"
+                    .to_string(),
                 confidence: 0.7,
             });
         }
@@ -628,7 +669,10 @@ impl PerformanceMonitor {
         bottlenecks
     }
 
-    pub fn get_optimization_recommendations(&self, target: &PerformanceTarget) -> Result<Vec<String>> {
+    pub fn get_optimization_recommendations(
+        &self,
+        target: &PerformanceTarget,
+    ) -> Result<Vec<String>> {
         let profile = self.generate_performance_profile()?;
         let mut recommendations = Vec::new();
 
@@ -646,20 +690,25 @@ impl PerformanceMonitor {
 
         // GPU recommendations
         if profile.average_metrics.gpu_usage_percent > 95.0 {
-            recommendations.push("GPU is fully utilized - consider upgrading GPU or lowering settings".to_string());
+            recommendations.push(
+                "GPU is fully utilized - consider upgrading GPU or lowering settings".to_string(),
+            );
         } else if profile.average_metrics.gpu_usage_percent < 60.0 {
-            recommendations.push("GPU is underutilized - you can increase graphics settings".to_string());
+            recommendations
+                .push("GPU is underutilized - you can increase graphics settings".to_string());
         }
 
         // Temperature recommendations
         if profile.average_metrics.gpu_temperature_c > target.max_gpu_temperature {
-            recommendations.push("GPU is running hot - improve case airflow or lower power limit".to_string());
+            recommendations
+                .push("GPU is running hot - improve case airflow or lower power limit".to_string());
         }
 
         // Memory recommendations
         if profile.average_metrics.gpu_memory_total_mb > 0 {
-            let vram_usage = (profile.average_metrics.gpu_memory_used_mb as f32 /
-                             profile.average_metrics.gpu_memory_total_mb as f32) * 100.0;
+            let vram_usage = (profile.average_metrics.gpu_memory_used_mb as f32
+                / profile.average_metrics.gpu_memory_total_mb as f32)
+                * 100.0;
             if vram_usage > 90.0 {
                 recommendations.push("VRAM usage is critical - lower texture quality".to_string());
             }
@@ -667,7 +716,10 @@ impl PerformanceMonitor {
 
         // Stability recommendations
         if profile.stability_score < 0.7 {
-            recommendations.push("Performance is unstable - check for thermal throttling or background processes".to_string());
+            recommendations.push(
+                "Performance is unstable - check for thermal throttling or background processes"
+                    .to_string(),
+            );
         }
 
         Ok(recommendations)
@@ -680,7 +732,9 @@ impl PerformanceMonitor {
                 Ok(serde_json::to_string_pretty(&profile)?)
             }
             ExportFormat::CSV => {
-                let mut csv = String::from("timestamp,fps,frame_time_ms,gpu_usage,gpu_temp,cpu_usage,ram_used\n");
+                let mut csv = String::from(
+                    "timestamp,fps,frame_time_ms,gpu_usage,gpu_temp,cpu_usage,ram_used\n",
+                );
                 for metrics in &self.metrics_history {
                     csv.push_str(&format!(
                         "{},{},{},{},{},{},{}\n",

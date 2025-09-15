@@ -1,7 +1,7 @@
 use anyhow::Result;
+use dirs;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use dirs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -32,7 +32,7 @@ pub struct WineConfig {
     pub winetricks_path: Option<PathBuf>,
     pub dxvk_versions_path: PathBuf,
     pub vkd3d_versions_path: PathBuf,
-    pub default_arch: String, // win32 or win64
+    pub default_arch: String,            // win32 or win64
     pub default_windows_version: String, // win10, win7, etc.
 }
 

@@ -106,7 +106,9 @@ impl SystemDetector {
             // Parse NAME or PRETTY_NAME from os-release
             for line in contents.lines() {
                 if line.starts_with("PRETTY_NAME=") {
-                    return line.split('=').nth(1)
+                    return line
+                        .split('=')
+                        .nth(1)
                         .unwrap_or("")
                         .trim_matches('"')
                         .to_string();
@@ -128,11 +130,7 @@ impl SystemDetector {
 
     fn get_desktop_environment() -> Option<String> {
         // Check common desktop environment variables
-        let env_vars = vec![
-            "XDG_CURRENT_DESKTOP",
-            "DESKTOP_SESSION",
-            "GDMSESSION",
-        ];
+        let env_vars = vec!["XDG_CURRENT_DESKTOP", "DESKTOP_SESSION", "GDMSESSION"];
 
         for var in env_vars {
             if let Ok(desktop) = std::env::var(var) {
@@ -153,10 +151,10 @@ impl SystemDetector {
             let output_str = String::from_utf8_lossy(&output.stdout);
 
             for line in output_str.lines() {
-                if line.to_lowercase().contains("vga compatible controller") ||
-                   line.to_lowercase().contains("3d controller") ||
-                   line.to_lowercase().contains("display controller") {
-
+                if line.to_lowercase().contains("vga compatible controller")
+                    || line.to_lowercase().contains("3d controller")
+                    || line.to_lowercase().contains("display controller")
+                {
                     let gpu = Self::parse_gpu_line(line)?;
                     if gpu.name != "Unknown" {
                         gpus.push(gpu);
@@ -229,25 +227,32 @@ impl SystemDetector {
         match vendor {
             GpuVendor::Nvidia => {
                 if Command::new("nvidia-smi").output().is_ok() {
-                    if let Ok(output) = Command::new("nvidia-smi").args(&["--query-gpu=driver_version", "--format=csv,noheader"]).output() {
-                        return Some(format!("NVIDIA {}", String::from_utf8_lossy(&output.stdout).trim()));
+                    if let Ok(output) = Command::new("nvidia-smi")
+                        .args(&["--query-gpu=driver_version", "--format=csv,noheader"])
+                        .output()
+                    {
+                        return Some(format!(
+                            "NVIDIA {}",
+                            String::from_utf8_lossy(&output.stdout).trim()
+                        ));
                     }
                     Some("NVIDIA".to_string())
                 } else {
                     Some("nouveau".to_string())
                 }
-            },
+            }
             GpuVendor::AMD => {
                 // Check for AMDGPU vs radeon driver
-                if std::fs::read_to_string("/proc/modules").unwrap_or_default().contains("amdgpu") {
+                if std::fs::read_to_string("/proc/modules")
+                    .unwrap_or_default()
+                    .contains("amdgpu")
+                {
                     Some("amdgpu".to_string())
                 } else {
                     Some("radeon".to_string())
                 }
-            },
-            GpuVendor::Intel => {
-                Some("i915".to_string())
-            },
+            }
+            GpuVendor::Intel => Some("i915".to_string()),
             _ => None,
         }
     }
@@ -303,14 +308,13 @@ impl SystemDetector {
             // Parse API version
             for line in output_str.lines() {
                 if line.contains("Vulkan Instance Version:") {
-                    vulkan_info.api_version = Some(
-                        line.split(':').nth(1).unwrap_or("").trim().to_string()
-                    );
+                    vulkan_info.api_version =
+                        Some(line.split(':').nth(1).unwrap_or("").trim().to_string());
                 }
                 if line.contains("deviceName") {
-                    vulkan_info.devices.push(
-                        line.split('=').nth(1).unwrap_or("").trim().to_string()
-                    );
+                    vulkan_info
+                        .devices
+                        .push(line.split('=').nth(1).unwrap_or("").trim().to_string());
                 }
             }
         }
@@ -362,9 +366,12 @@ impl SystemDetector {
 
     fn detect_gaming_tools() -> Result<GamingTools> {
         Ok(GamingTools {
-            dxvk: Self::check_command_exists("dxvk") || Self::check_vulkan_layer("VK_LAYER_VALVE_steam_overlay"),
-            vkd3d: Self::check_command_exists("vkd3d-proton") || std::path::Path::new("/usr/lib/vkd3d-proton").exists(),
-            mangohud: Self::check_command_exists("mangohud") || Self::check_vulkan_layer("VK_LAYER_MANGOHUD_overlay"),
+            dxvk: Self::check_command_exists("dxvk")
+                || Self::check_vulkan_layer("VK_LAYER_VALVE_steam_overlay"),
+            vkd3d: Self::check_command_exists("vkd3d-proton")
+                || std::path::Path::new("/usr/lib/vkd3d-proton").exists(),
+            mangohud: Self::check_command_exists("mangohud")
+                || Self::check_vulkan_layer("VK_LAYER_MANGOHUD_overlay"),
             gamemode: Self::check_command_exists("gamemoderun"),
             gamescope: Self::check_command_exists("gamescope"),
             winetricks: Self::check_command_exists("winetricks"),
@@ -404,10 +411,14 @@ impl SystemDetector {
         if let Ok(desktop) = std::env::var("XDG_CURRENT_DESKTOP") {
             match desktop.to_lowercase().as_str() {
                 "kde" | "plasma" => {
-                    println!("  • Consider disabling compositing in KDE for better gaming performance");
+                    println!(
+                        "  • Consider disabling compositing in KDE for better gaming performance"
+                    );
                 }
                 "gnome" => {
-                    println!("  • GNOME detected - consider using gamescope for better performance");
+                    println!(
+                        "  • GNOME detected - consider using gamescope for better performance"
+                    );
                 }
                 _ => {}
             }
@@ -453,7 +464,10 @@ impl SystemDetector {
         ];
 
         for (verb, desc) in deps {
-            report.push_str(&format!("  ℹ️  Recommend installing: {} ({})\n", verb, desc));
+            report.push_str(&format!(
+                "  ℹ️  Recommend installing: {} ({})\n",
+                verb, desc
+            ));
         }
 
         Ok(report)
@@ -473,9 +487,7 @@ impl SystemDetector {
             name if name.contains("hearthstone") => {
                 "Recommended: win10, vcrun2019, corefonts, dotnet48".to_string()
             }
-            _ => {
-                "Recommended: win10, DXVK enabled, vcrun2019, corefonts".to_string()
-            }
+            _ => "Recommended: win10, DXVK enabled, vcrun2019, corefonts".to_string(),
         }
     }
 }

@@ -1,15 +1,15 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use reqwest;
-use indicatif::{ProgressBar, ProgressStyle};
-use std::fs;
-use tar::Archive;
 use flate2::read::GzDecoder;
 use futures_util::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
+use reqwest;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs;
 use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use tar::Archive;
 
 // NVIDIA-specific structures
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -75,8 +75,8 @@ impl Default for GameScopeConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GameScopeUpscaling {
     None,
-    FSR,   // FidelityFX Super Resolution
-    NIS,   // NVIDIA Image Scaling
+    FSR, // FidelityFX Super Resolution
+    NIS, // NVIDIA Image Scaling
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,17 +108,17 @@ pub struct GraphicsLayer {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum GraphicsLayerType {
-    DXVK,           // DirectX 9/10/11 to Vulkan
-    VKD3D,          // Direct3D 12 to Vulkan
-    DXVKDGPU,       // DXVK for older GPUs
-    VKD3DProton,    // Valve's VKD3D-Proton
-    DXVKNVAPI,      // NVIDIA-specific features
-    WineD3D,        // Wine's built-in D3D
-    GameScope,      // Valve's GameScope compositor
-    NvidiaDlss,    // NVIDIA DLSS
-    NvidiaRtx,     // NVIDIA RTX features
-    MangoHud,       // Performance overlay
-    GameMode,       // System optimizations
+    DXVK,        // DirectX 9/10/11 to Vulkan
+    VKD3D,       // Direct3D 12 to Vulkan
+    DXVKDGPU,    // DXVK for older GPUs
+    VKD3DProton, // Valve's VKD3D-Proton
+    DXVKNVAPI,   // NVIDIA-specific features
+    WineD3D,     // Wine's built-in D3D
+    GameScope,   // Valve's GameScope compositor
+    NvidiaDlss,  // NVIDIA DLSS
+    NvidiaRtx,   // NVIDIA RTX features
+    MangoHud,    // Performance overlay
+    GameMode,    // System optimizations
 }
 
 impl GraphicsManager {
@@ -168,9 +168,15 @@ impl GraphicsManager {
                                     layer_type: GraphicsLayerType::DXVK,
                                     path: self.dxvk_dir.join(format!("dxvk-{}", tag)),
                                     installed: false,
-                                    download_url: asset["browser_download_url"].as_str().map(String::from),
+                                    download_url: asset["browser_download_url"]
+                                        .as_str()
+                                        .map(String::from),
                                     checksum: None,
-                                    supported_apis: vec!["d3d9".to_string(), "d3d10core".to_string(), "d3d11".to_string()],
+                                    supported_apis: vec![
+                                        "d3d9".to_string(),
+                                        "d3d10core".to_string(),
+                                        "d3d11".to_string(),
+                                    ],
                                 });
                                 break;
                             }
@@ -208,7 +214,9 @@ impl GraphicsManager {
                                     layer_type: GraphicsLayerType::VKD3DProton,
                                     path: self.vkd3d_dir.join(format!("vkd3d-proton-{}", tag)),
                                     installed: false,
-                                    download_url: asset["browser_download_url"].as_str().map(String::from),
+                                    download_url: asset["browser_download_url"]
+                                        .as_str()
+                                        .map(String::from),
                                     checksum: None,
                                     supported_apis: vec!["d3d12".to_string()],
                                 });
@@ -243,7 +251,11 @@ impl GraphicsManager {
                             installed: true,
                             download_url: None,
                             checksum: None,
-                            supported_apis: vec!["d3d9".to_string(), "d3d10core".to_string(), "d3d11".to_string()],
+                            supported_apis: vec![
+                                "d3d9".to_string(),
+                                "d3d10core".to_string(),
+                                "d3d11".to_string(),
+                            ],
                         });
                     }
                 }
@@ -324,7 +336,12 @@ impl GraphicsManager {
         Ok(())
     }
 
-    fn extract_graphics_layer(&self, archive_path: &Path, destination: &Path, _layer_type: &GraphicsLayerType) -> Result<()> {
+    fn extract_graphics_layer(
+        &self,
+        archive_path: &Path,
+        destination: &Path,
+        _layer_type: &GraphicsLayerType,
+    ) -> Result<()> {
         fs::create_dir_all(destination)?;
 
         if archive_path.to_str().unwrap().ends_with(".tar.gz") {
@@ -334,7 +351,12 @@ impl GraphicsManager {
             archive.unpack(destination)?;
         } else if archive_path.to_str().unwrap().ends_with(".tar.xz") {
             Command::new("tar")
-                .args(&["-xf", archive_path.to_str().unwrap(), "-C", destination.to_str().unwrap()])
+                .args(&[
+                    "-xf",
+                    archive_path.to_str().unwrap(),
+                    "-C",
+                    destination.to_str().unwrap(),
+                ])
                 .status()?;
         }
 
@@ -343,20 +365,20 @@ impl GraphicsManager {
 
     pub fn install_to_prefix(&self, layer: &GraphicsLayer, prefix_path: &Path) -> Result<()> {
         if self.dry_run {
-            println!("🔄 [DRY RUN] Would install {} to prefix: {}", layer.name, prefix_path.display());
+            println!(
+                "🔄 [DRY RUN] Would install {} to prefix: {}",
+                layer.name,
+                prefix_path.display()
+            );
             return Ok(());
         }
 
         match layer.layer_type {
-            GraphicsLayerType::DXVK => {
-                self.install_dxvk_to_prefix(layer, prefix_path)
-            }
-            GraphicsLayerType::VKD3DProton => {
-                self.install_vkd3d_to_prefix(layer, prefix_path)
-            }
-            _ => {
-                Err(anyhow::anyhow!("Unsupported layer type for prefix installation"))
-            }
+            GraphicsLayerType::DXVK => self.install_dxvk_to_prefix(layer, prefix_path),
+            GraphicsLayerType::VKD3DProton => self.install_vkd3d_to_prefix(layer, prefix_path),
+            _ => Err(anyhow::anyhow!(
+                "Unsupported layer type for prefix installation"
+            )),
         }
     }
 
@@ -398,15 +420,15 @@ impl GraphicsManager {
     }
 
     fn install_vkd3d_to_prefix(&self, layer: &GraphicsLayer, prefix_path: &Path) -> Result<()> {
-        println!("🔧 Installing VKD3D-Proton to prefix: {}", prefix_path.display());
+        println!(
+            "🔧 Installing VKD3D-Proton to prefix: {}",
+            prefix_path.display()
+        );
 
         let system32_path = prefix_path.join("drive_c/windows/system32");
         fs::create_dir_all(&system32_path)?;
 
-        let vkd3d_dlls = vec![
-            "d3d12.dll",
-            "dxcore.dll",
-        ];
+        let vkd3d_dlls = vec!["d3d12.dll", "dxcore.dll"];
 
         for dll_name in vkd3d_dlls {
             let src_path = layer.path.join("x64").join(dll_name);
@@ -438,7 +460,16 @@ impl GraphicsManager {
             } else {
                 Command::new("wine")
                     .env("WINEPREFIX", prefix_path)
-                    .args(&["reg", "add", "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides", "/v", dll, "/d", mode, "/f"])
+                    .args(&[
+                        "reg",
+                        "add",
+                        "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides",
+                        "/v",
+                        dll,
+                        "/d",
+                        mode,
+                        "/f",
+                    ])
                     .output()?;
                 println!("  ✅ Set {} override to {}", dll, mode);
             }
@@ -448,10 +479,7 @@ impl GraphicsManager {
     }
 
     fn set_vkd3d_dll_overrides(&self, prefix_path: &Path) -> Result<()> {
-        let overrides = vec![
-            ("d3d12", "native"),
-            ("dxcore", "native"),
-        ];
+        let overrides = vec![("d3d12", "native"), ("dxcore", "native")];
 
         for (dll, mode) in overrides {
             if self.dry_run {
@@ -459,7 +487,16 @@ impl GraphicsManager {
             } else {
                 Command::new("wine")
                     .env("WINEPREFIX", prefix_path)
-                    .args(&["reg", "add", "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides", "/v", dll, "/d", mode, "/f"])
+                    .args(&[
+                        "reg",
+                        "add",
+                        "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides",
+                        "/v",
+                        dll,
+                        "/d",
+                        mode,
+                        "/f",
+                    ])
                     .output()?;
                 println!("  ✅ Set {} override to {}", dll, mode);
             }
@@ -468,22 +505,24 @@ impl GraphicsManager {
         Ok(())
     }
 
-    pub fn remove_from_prefix(&self, layer_type: GraphicsLayerType, prefix_path: &Path) -> Result<()> {
+    pub fn remove_from_prefix(
+        &self,
+        layer_type: GraphicsLayerType,
+        prefix_path: &Path,
+    ) -> Result<()> {
         if self.dry_run {
-            println!("🔄 [DRY RUN] Would remove {:?} from prefix: {}", layer_type, prefix_path.display());
+            println!(
+                "🔄 [DRY RUN] Would remove {:?} from prefix: {}",
+                layer_type,
+                prefix_path.display()
+            );
             return Ok(());
         }
 
         match layer_type {
-            GraphicsLayerType::DXVK => {
-                self.remove_dxvk_from_prefix(prefix_path)
-            }
-            GraphicsLayerType::VKD3DProton => {
-                self.remove_vkd3d_from_prefix(prefix_path)
-            }
-            _ => {
-                Err(anyhow::anyhow!("Unsupported layer type for removal"))
-            }
+            GraphicsLayerType::DXVK => self.remove_dxvk_from_prefix(prefix_path),
+            GraphicsLayerType::VKD3DProton => self.remove_vkd3d_from_prefix(prefix_path),
+            _ => Err(anyhow::anyhow!("Unsupported layer type for removal")),
         }
     }
 
@@ -510,7 +549,16 @@ impl GraphicsManager {
             // Reset DLL override to builtin
             Command::new("wine")
                 .env("WINEPREFIX", prefix_path)
-                .args(&["reg", "add", "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides", "/v", &dll_name.replace(".dll", ""), "/d", "builtin", "/f"])
+                .args(&[
+                    "reg",
+                    "add",
+                    "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides",
+                    "/v",
+                    &dll_name.replace(".dll", ""),
+                    "/d",
+                    "builtin",
+                    "/f",
+                ])
                 .output()?;
         }
 
@@ -533,7 +581,16 @@ impl GraphicsManager {
             // Reset DLL override to builtin
             Command::new("wine")
                 .env("WINEPREFIX", prefix_path)
-                .args(&["reg", "add", "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides", "/v", &dll_name.replace(".dll", ""), "/d", "builtin", "/f"])
+                .args(&[
+                    "reg",
+                    "add",
+                    "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides",
+                    "/v",
+                    &dll_name.replace(".dll", ""),
+                    "/d",
+                    "builtin",
+                    "/f",
+                ])
                 .output()?;
         }
 
@@ -563,7 +620,11 @@ impl GraphicsManager {
         Ok(info)
     }
 
-    pub fn recommend_for_game(&self, game_name: &str, nvidia_features: &NvidiaFeatures) -> Vec<GraphicsLayerType> {
+    pub fn recommend_for_game(
+        &self,
+        game_name: &str,
+        nvidia_features: &NvidiaFeatures,
+    ) -> Vec<GraphicsLayerType> {
         let game_lower = game_name.to_lowercase();
         let mut recommendations = Vec::new();
 
@@ -598,10 +659,11 @@ impl GraphicsManager {
             }
 
             // GameScope for newer games or those that benefit from upscaling
-            if game_lower.contains("cyberpunk") ||
-               game_lower.contains("metro") ||
-               game_lower.contains("control") ||
-               game_lower.contains("battlefield") {
+            if game_lower.contains("cyberpunk")
+                || game_lower.contains("metro")
+                || game_lower.contains("control")
+                || game_lower.contains("battlefield")
+            {
                 recommendations.push(GraphicsLayerType::GameScope);
             }
         }
@@ -615,7 +677,10 @@ impl GraphicsManager {
 
         // Check for NVIDIA GPU using nvidia-smi
         if let Ok(output) = Command::new("nvidia-smi")
-            .args(&["--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"])
+            .args(&[
+                "--query-gpu=name,driver_version,memory.total",
+                "--format=csv,noheader,nounits",
+            ])
             .output()
         {
             if output.status.success() {
@@ -634,9 +699,9 @@ impl GraphicsManager {
 
                         // Detect RTX support based on GPU name
                         if let Some(ref name) = features.gpu_name {
-                            features.supports_rtx = name.to_uppercase().contains("RTX") ||
-                                                   name.to_uppercase().contains("QUADRO RTX") ||
-                                                   name.to_uppercase().contains("TITAN RTX");
+                            features.supports_rtx = name.to_uppercase().contains("RTX")
+                                || name.to_uppercase().contains("QUADRO RTX")
+                                || name.to_uppercase().contains("TITAN RTX");
 
                             // DLSS support is available on RTX 20xx series and newer
                             features.supports_dlss = features.supports_rtx;
@@ -666,7 +731,10 @@ impl GraphicsManager {
         false
     }
 
-    pub fn setup_nvidia_optimizations(&self, nvidia_features: &NvidiaFeatures) -> Result<NvidiaGameSettings> {
+    pub fn setup_nvidia_optimizations(
+        &self,
+        nvidia_features: &NvidiaFeatures,
+    ) -> Result<NvidiaGameSettings> {
         let mut settings = NvidiaGameSettings::default();
 
         if !nvidia_features.available {
@@ -676,27 +744,46 @@ impl GraphicsManager {
         // Enable Prime Render Offload if Optimus is available
         if nvidia_features.optimus_available {
             settings.prime_render_offload = true;
-            settings.environment_vars.insert("__NV_PRIME_RENDER_OFFLOAD".to_string(), "1".to_string());
-            settings.environment_vars.insert("__GLX_VENDOR_LIBRARY_NAME".to_string(), "nvidia".to_string());
+            settings
+                .environment_vars
+                .insert("__NV_PRIME_RENDER_OFFLOAD".to_string(), "1".to_string());
+            settings.environment_vars.insert(
+                "__GLX_VENDOR_LIBRARY_NAME".to_string(),
+                "nvidia".to_string(),
+            );
         }
 
         // DLSS settings
         if nvidia_features.supports_dlss {
             settings.dlss_enabled = true;
-            settings.environment_vars.insert("DXVK_ENABLE_NVAPI".to_string(), "1".to_string());
-            settings.environment_vars.insert("DXVK_NVAPI_ALLOW_OTHER_DRIVERS".to_string(), "0".to_string());
+            settings
+                .environment_vars
+                .insert("DXVK_ENABLE_NVAPI".to_string(), "1".to_string());
+            settings.environment_vars.insert(
+                "DXVK_NVAPI_ALLOW_OTHER_DRIVERS".to_string(),
+                "0".to_string(),
+            );
         }
 
         // RTX settings
         if nvidia_features.supports_rtx {
             settings.rtx_enabled = true;
-            settings.environment_vars.insert("VKD3D_CONFIG".to_string(), "dxr".to_string());
+            settings
+                .environment_vars
+                .insert("VKD3D_CONFIG".to_string(), "dxr".to_string());
         }
 
         // General NVIDIA optimizations
-        settings.environment_vars.insert("__GL_SHADER_DISK_CACHE".to_string(), "1".to_string());
-        settings.environment_vars.insert("__GL_SHADER_DISK_CACHE_PATH".to_string(), "/tmp/nvidia_shader_cache".to_string());
-        settings.environment_vars.insert("NVIDIA_DRIVER_CAPABILITIES".to_string(), "all".to_string());
+        settings
+            .environment_vars
+            .insert("__GL_SHADER_DISK_CACHE".to_string(), "1".to_string());
+        settings.environment_vars.insert(
+            "__GL_SHADER_DISK_CACHE_PATH".to_string(),
+            "/tmp/nvidia_shader_cache".to_string(),
+        );
+        settings
+            .environment_vars
+            .insert("NVIDIA_DRIVER_CAPABILITIES".to_string(), "all".to_string());
 
         Ok(settings)
     }
@@ -747,11 +834,11 @@ impl GraphicsManager {
         match config.upscaling {
             GameScopeUpscaling::FSR => {
                 args.push("--fsr-upscaling".to_string());
-            },
+            }
             GameScopeUpscaling::NIS => {
                 args.push("--nis-upscaling".to_string());
-            },
-            GameScopeUpscaling::None => {},
+            }
+            GameScopeUpscaling::None => {}
         }
 
         // Scaling filter
@@ -759,15 +846,15 @@ impl GraphicsManager {
             GameScopeFilter::Nearest => {
                 args.push("--filter".to_string());
                 args.push("nearest".to_string());
-            },
+            }
             GameScopeFilter::Linear => {
                 args.push("--filter".to_string());
                 args.push("linear".to_string());
-            },
+            }
             GameScopeFilter::FSR => {
                 args.push("--filter".to_string());
                 args.push("fsr".to_string());
-            },
+            }
         }
 
         // Add separator for game command
@@ -776,7 +863,10 @@ impl GraphicsManager {
         Ok(args)
     }
 
-    pub fn setup_mangohud_nvidia(&self, nvidia_features: &NvidiaFeatures) -> Result<HashMap<String, String>> {
+    pub fn setup_mangohud_nvidia(
+        &self,
+        nvidia_features: &NvidiaFeatures,
+    ) -> Result<HashMap<String, String>> {
         let mut env_vars = HashMap::new();
 
         // Basic MangoHud configuration
@@ -789,7 +879,7 @@ impl GraphicsManager {
             "cpu_power",
             "cpu_mhz",
             "ram",
-            "vram"
+            "vram",
         ];
 
         // Add NVIDIA-specific monitoring if available
@@ -800,7 +890,7 @@ impl GraphicsManager {
                 "gpu_core_clock",
                 "gpu_mem_clock",
                 "gpu_load_change",
-                "gpu_load_value=60,90"
+                "gpu_load_value=60,90",
             ]);
         }
 

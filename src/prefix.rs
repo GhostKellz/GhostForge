@@ -1,10 +1,10 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
-use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,7 +20,7 @@ pub struct WinePrefix {
     pub name: String,
     pub path: PathBuf,
     pub wine_version: String,
-    pub arch: String, // win32, win64
+    pub arch: String,            // win32, win64
     pub windows_version: String, // win10, win7, etc.
     pub created: DateTime<Utc>,
     pub last_used: DateTime<Utc>,
@@ -30,7 +30,7 @@ pub struct WinePrefix {
     pub dll_overrides: HashMap<String, String>,
     pub registry_tweaks: HashMap<String, String>,
     pub installed_packages: Vec<String>, // winetricks packages
-    pub graphics_layers: Vec<String>, // DXVK, VKD3D, etc.
+    pub graphics_layers: Vec<String>,    // DXVK, VKD3D, etc.
     pub health_status: PrefixHealth,
     pub auto_managed: bool, // If true, GhostForge manages this prefix automatically
 }
@@ -90,7 +90,11 @@ impl PrefixManager {
             PrefixTemplate {
                 name: "battlenet".to_string(),
                 description: "Optimized for Battle.net games (WoW, Diablo, Overwatch)".to_string(),
-                target_games: vec!["world_of_warcraft".to_string(), "diablo_iv".to_string(), "overwatch_2".to_string()],
+                target_games: vec![
+                    "world_of_warcraft".to_string(),
+                    "diablo_iv".to_string(),
+                    "overwatch_2".to_string(),
+                ],
                 wine_version: "wine-staging".to_string(),
                 arch: "win64".to_string(),
                 windows_version: "win10".to_string(),
@@ -103,8 +107,15 @@ impl PrefixManager {
                 },
                 registry_tweaks: {
                     let mut tweaks = HashMap::new();
-                    tweaks.insert("HKEY_CURRENT_USER\\Software\\Wine\\Direct3D\\VideoMemorySize".to_string(), "8192".to_string());
-                    tweaks.insert("HKEY_CURRENT_USER\\Software\\Wine\\DirectSound\\HardwareAcceleration".to_string(), "Full".to_string());
+                    tweaks.insert(
+                        "HKEY_CURRENT_USER\\Software\\Wine\\Direct3D\\VideoMemorySize".to_string(),
+                        "8192".to_string(),
+                    );
+                    tweaks.insert(
+                        "HKEY_CURRENT_USER\\Software\\Wine\\DirectSound\\HardwareAcceleration"
+                            .to_string(),
+                        "Full".to_string(),
+                    );
                     tweaks
                 },
                 winetricks_packages: vec![
@@ -114,11 +125,8 @@ impl PrefixManager {
                 ],
                 graphics_layers: vec!["dxvk".to_string()],
                 pre_setup_commands: vec![],
-                post_setup_commands: vec![
-                    "echo 'Battle.net prefix setup complete'".to_string(),
-                ],
+                post_setup_commands: vec!["echo 'Battle.net prefix setup complete'".to_string()],
             },
-
             // Gaming template (generic)
             PrefixTemplate {
                 name: "gaming".to_string(),
@@ -137,8 +145,15 @@ impl PrefixManager {
                 },
                 registry_tweaks: {
                     let mut tweaks = HashMap::new();
-                    tweaks.insert("HKEY_CURRENT_USER\\Software\\Wine\\Direct3D\\VideoMemorySize".to_string(), "4096".to_string());
-                    tweaks.insert("HKEY_CURRENT_USER\\Software\\Wine\\Direct3D\\OffscreenRenderingMode".to_string(), "fbo".to_string());
+                    tweaks.insert(
+                        "HKEY_CURRENT_USER\\Software\\Wine\\Direct3D\\VideoMemorySize".to_string(),
+                        "4096".to_string(),
+                    );
+                    tweaks.insert(
+                        "HKEY_CURRENT_USER\\Software\\Wine\\Direct3D\\OffscreenRenderingMode"
+                            .to_string(),
+                        "fbo".to_string(),
+                    );
                     tweaks
                 },
                 winetricks_packages: vec![
@@ -150,7 +165,6 @@ impl PrefixManager {
                 pre_setup_commands: vec![],
                 post_setup_commands: vec![],
             },
-
             // Legacy template for older games
             PrefixTemplate {
                 name: "legacy".to_string(),
@@ -200,9 +214,14 @@ impl PrefixManager {
         Ok(templates)
     }
 
-    pub fn create_prefix_from_template(&self, template_name: &str, prefix_name: &str) -> Result<WinePrefix> {
+    pub fn create_prefix_from_template(
+        &self,
+        template_name: &str,
+        prefix_name: &str,
+    ) -> Result<WinePrefix> {
         let templates = self.list_templates()?;
-        let template = templates.iter()
+        let template = templates
+            .iter()
             .find(|t| t.name == template_name)
             .ok_or_else(|| anyhow::anyhow!("Template '{}' not found", template_name))?;
 
@@ -230,7 +249,10 @@ impl PrefixManager {
         };
 
         if self.dry_run {
-            println!("🔄 [DRY RUN] Would create prefix from template '{}':", template_name);
+            println!(
+                "🔄 [DRY RUN] Would create prefix from template '{}':",
+                template_name
+            );
             println!("  Name: {}", prefix_name);
             println!("  Path: {}", prefix_path.display());
             println!("  Wine Version: {}", template.wine_version);
@@ -241,7 +263,10 @@ impl PrefixManager {
             return Ok(prefix);
         }
 
-        println!("🍷 Creating Wine prefix from '{}' template...", template_name);
+        println!(
+            "🍷 Creating Wine prefix from '{}' template...",
+            template_name
+        );
 
         // Create the prefix directory
         fs::create_dir_all(&prefix_path)?;
@@ -289,7 +314,11 @@ impl PrefixManager {
         Ok(())
     }
 
-    fn apply_template_configuration(&self, prefix: &WinePrefix, template: &PrefixTemplate) -> Result<()> {
+    fn apply_template_configuration(
+        &self,
+        prefix: &WinePrefix,
+        template: &PrefixTemplate,
+    ) -> Result<()> {
         println!("⚙️ Applying template configuration...");
 
         // Set Windows version
@@ -323,7 +352,16 @@ impl PrefixManager {
     fn set_windows_version(&self, prefix: &WinePrefix, version: &str) -> Result<()> {
         Command::new("wine")
             .env("WINEPREFIX", &prefix.path)
-            .args(&["reg", "add", "HKEY_CURRENT_USER\\Software\\Wine", "/v", "Version", "/d", version, "/f"])
+            .args(&[
+                "reg",
+                "add",
+                "HKEY_CURRENT_USER\\Software\\Wine",
+                "/v",
+                "Version",
+                "/d",
+                version,
+                "/f",
+            ])
             .output()?;
 
         println!("  ✅ Set Windows version to {}", version);
@@ -333,7 +371,16 @@ impl PrefixManager {
     fn set_dll_override(&self, prefix: &WinePrefix, dll: &str, mode: &str) -> Result<()> {
         Command::new("wine")
             .env("WINEPREFIX", &prefix.path)
-            .args(&["reg", "add", "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides", "/v", dll, "/d", mode, "/f"])
+            .args(&[
+                "reg",
+                "add",
+                "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides",
+                "/v",
+                dll,
+                "/d",
+                mode,
+                "/f",
+            ])
             .output()?;
 
         println!("  ✅ Set {} override to {}", dll, mode);
@@ -364,12 +411,19 @@ impl PrefixManager {
 
         if self.dry_run {
             println!("🔄 [DRY RUN] Would clone prefix:");
-            println!("  From: {} ({})", source_prefix.name, source_prefix.path.display());
+            println!(
+                "  From: {} ({})",
+                source_prefix.name,
+                source_prefix.path.display()
+            );
             println!("  To: {} ({})", new_name, new_path.display());
             return Ok(source_prefix); // Return source for demo
         }
 
-        println!("📋 Cloning prefix '{}' to '{}'...", source_prefix.name, new_name);
+        println!(
+            "📋 Cloning prefix '{}' to '{}'...",
+            source_prefix.name, new_name
+        );
 
         // Copy the entire prefix directory
         self.copy_directory(&source_prefix.path, &new_path)?;
@@ -454,11 +508,7 @@ impl PrefixManager {
 
     pub fn check_prefix_health(&self, prefix: &WinePrefix) -> Result<PrefixHealth> {
         // Check if essential Wine files exist
-        let essential_files = vec![
-            "system.reg",
-            "user.reg",
-            "drive_c/windows/system32",
-        ];
+        let essential_files = vec!["system.reg", "user.reg", "drive_c/windows/system32"];
 
         for file in essential_files {
             let file_path = prefix.path.join(file);

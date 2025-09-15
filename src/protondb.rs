@@ -1,6 +1,6 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use reqwest;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ProtonDB API Response Structures
@@ -133,7 +133,8 @@ impl ProtonDBClient {
     pub async fn get_game_summary(&self, steam_appid: u32) -> Result<Option<ProtonDBSummary>> {
         let url = format!("{}/reports/summaries/{}.json", self.base_url, steam_appid);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("User-Agent", "GhostForge/1.0")
             .send()
@@ -148,11 +149,19 @@ impl ProtonDBClient {
     }
 
     /// Get detailed reports for a game
-    pub async fn get_game_reports(&self, steam_appid: u32, limit: Option<u32>) -> Result<Vec<GameReport>> {
+    pub async fn get_game_reports(
+        &self,
+        steam_appid: u32,
+        limit: Option<u32>,
+    ) -> Result<Vec<GameReport>> {
         let limit = limit.unwrap_or(20);
-        let url = format!("{}/reports/summaries/{}.json?limit={}", self.base_url, steam_appid, limit);
+        let url = format!(
+            "{}/reports/summaries/{}.json?limit={}",
+            self.base_url, steam_appid, limit
+        );
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("User-Agent", "GhostForge/1.0")
             .send()
@@ -174,7 +183,8 @@ impl ProtonDBClient {
         // For now, this is a placeholder implementation
         let url = format!("{}/aggregate/summaries.json", self.base_url);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("User-Agent", "GhostForge/1.0")
             .send()
@@ -186,7 +196,8 @@ impl ProtonDBClient {
 
         // Filter games by name (simplified)
         let games: Vec<ProtonDBGame> = response.json().await?;
-        let filtered = games.into_iter()
+        let filtered = games
+            .into_iter()
             .filter(|game| game.name.to_lowercase().contains(&query.to_lowercase()))
             .collect();
 
@@ -198,7 +209,8 @@ impl ProtonDBClient {
         let limit = limit.unwrap_or(50);
         let url = format!("{}/aggregate/summaries.json", self.base_url);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .header("User-Agent", "GhostForge/1.0")
             .send()
@@ -227,7 +239,8 @@ impl ProtonDBClient {
             };
 
             // Then by number of recent reports
-            tier_order_b.cmp(&tier_order_a)
+            tier_order_b
+                .cmp(&tier_order_a)
                 .then_with(|| b.recent_reports.cmp(&a.recent_reports))
         });
 
@@ -306,18 +319,14 @@ impl ProtonDBClient {
                 ProtonDBTier::Platinum | ProtonDBTier::Gold => {
                     Some("Proton GE (Latest)".to_string())
                 }
-                ProtonDBTier::Silver => {
-                    Some("Try Proton GE or Proton Experimental".to_string())
-                }
+                ProtonDBTier::Silver => Some("Try Proton GE or Proton Experimental".to_string()),
                 ProtonDBTier::Bronze => {
                     Some("Multiple versions - check community reports".to_string())
                 }
                 ProtonDBTier::Borked => {
                     Some("Not currently working - try latest Proton GE".to_string())
                 }
-                ProtonDBTier::Pending => {
-                    Some("Unknown - start with Proton GE".to_string())
-                }
+                ProtonDBTier::Pending => Some("Unknown - start with Proton GE".to_string()),
             };
 
             return Ok(recommendation);
@@ -327,13 +336,20 @@ impl ProtonDBClient {
     }
 
     /// Generate a compatibility report for GhostForge UI
-    pub async fn generate_compatibility_report(&self, steam_appid: u32, game_name: &str) -> Result<GameCompatibilityReport> {
+    pub async fn generate_compatibility_report(
+        &self,
+        steam_appid: u32,
+        game_name: &str,
+    ) -> Result<GameCompatibilityReport> {
         let summary = self.get_game_summary(steam_appid).await?;
 
         let report = if let Some(summary) = summary {
             let (tier_display, tier_description) = Self::format_tier(&summary.tier);
             let tips = self.get_compatibility_tips(steam_appid, &summary.tier);
-            let recommended_proton = self.get_recommended_proton(steam_appid).await?.unwrap_or("Proton GE".to_string());
+            let recommended_proton = self
+                .get_recommended_proton(steam_appid)
+                .await?
+                .unwrap_or("Proton GE".to_string());
 
             GameCompatibilityReport {
                 appid: steam_appid,
@@ -378,10 +394,7 @@ impl ProtonDBClient {
     pub async fn get_steam_appid(&self, game_name: &str) -> Result<Option<u32>> {
         let steam_url = "https://api.steampowered.com/ISteamApps/GetAppList/v2/";
 
-        let response = self.client
-            .get(steam_url)
-            .send()
-            .await?;
+        let response = self.client.get(steam_url).send().await?;
 
         if response.status() != 200 {
             return Ok(None);
@@ -407,8 +420,13 @@ impl ProtonDBClient {
     }
 
     /// Get comprehensive compatibility report for a game
-    pub async fn get_compatibility_info(&self, steam_appid: u32) -> Result<GameCompatibilityReport> {
-        let summary = self.get_game_summary(steam_appid).await?
+    pub async fn get_compatibility_info(
+        &self,
+        steam_appid: u32,
+    ) -> Result<GameCompatibilityReport> {
+        let summary = self
+            .get_game_summary(steam_appid)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Game not found in ProtonDB"))?;
 
         let reports = self.get_game_reports(steam_appid, Some(10)).await?;
@@ -419,13 +437,16 @@ impl ProtonDBClient {
 
         for report in &reports {
             // Count Wine/Proton versions
-            *wine_versions.entry(report.proton_version.clone()).or_insert(0) += 1;
+            *wine_versions
+                .entry(report.proton_version.clone())
+                .or_insert(0) += 1;
 
             // Collect issues and working configs
             if let Some(notes) = &report.notes {
                 if report.tier == ProtonDBTier::Platinum || report.tier == ProtonDBTier::Gold {
                     working_configs.push(notes.clone());
-                } else if report.tier == ProtonDBTier::Bronze || report.tier == ProtonDBTier::Borked {
+                } else if report.tier == ProtonDBTier::Bronze || report.tier == ProtonDBTier::Borked
+                {
                     common_issues.push(notes.clone());
                 }
             }
@@ -469,11 +490,8 @@ impl ProtonDBClient {
         match tier {
             ProtonDBTier::Platinum => vec![],
             ProtonDBTier::Gold | ProtonDBTier::Silver => {
-                vec![
-                    "vcrun2019".to_string(),
-                    "corefonts".to_string(),
-                ]
-            },
+                vec!["vcrun2019".to_string(), "corefonts".to_string()]
+            }
             ProtonDBTier::Bronze => {
                 vec![
                     "vcrun2019".to_string(),
@@ -481,7 +499,7 @@ impl ProtonDBClient {
                     "dotnet48".to_string(),
                     "mfc140".to_string(),
                 ]
-            },
+            }
             _ => vec![
                 "vcrun2019".to_string(),
                 "corefonts".to_string(),
@@ -494,9 +512,7 @@ impl ProtonDBClient {
     fn suggest_launch_options(&self, tier: &ProtonDBTier) -> Vec<String> {
         match tier {
             ProtonDBTier::Platinum => vec![],
-            ProtonDBTier::Gold => vec![
-                "PROTON_USE_WINED3D=1".to_string(),
-            ],
+            ProtonDBTier::Gold => vec!["PROTON_USE_WINED3D=1".to_string()],
             ProtonDBTier::Silver | ProtonDBTier::Bronze => vec![
                 "PROTON_USE_WINED3D=1".to_string(),
                 "PROTON_NO_ESYNC=1".to_string(),
@@ -510,7 +526,11 @@ impl ProtonDBClient {
     }
 
     /// Cache ProtonDB data locally
-    pub async fn cache_game_data(&self, steam_appid: u32, cache_dir: &std::path::Path) -> Result<()> {
+    pub async fn cache_game_data(
+        &self,
+        steam_appid: u32,
+        cache_dir: &std::path::Path,
+    ) -> Result<()> {
         let summary = self.get_game_summary(steam_appid).await?;
         if let Some(game_data) = summary {
             let cache_file = cache_dir.join(format!("{}.json", steam_appid));
@@ -522,7 +542,11 @@ impl ProtonDBClient {
     }
 
     /// Load cached ProtonDB data
-    pub fn load_cached_data(&self, steam_appid: u32, cache_dir: &std::path::Path) -> Result<Option<ProtonDBGame>> {
+    pub fn load_cached_data(
+        &self,
+        steam_appid: u32,
+        cache_dir: &std::path::Path,
+    ) -> Result<Option<ProtonDBGame>> {
         let cache_file = cache_dir.join(format!("{}.json", steam_appid));
         if cache_file.exists() {
             let json = std::fs::read_to_string(cache_file)?;

@@ -1,12 +1,12 @@
 use anyhow::Result;
+use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use which::which;
-use indicatif::{ProgressBar, ProgressStyle};
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
+use which::which;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WinetricksManager {
@@ -39,23 +39,22 @@ pub enum WinetrickCategory {
 
 impl WinetricksManager {
     pub fn new(cache_dir: PathBuf) -> Result<Self> {
-        let winetricks_path = which("winetricks")
-            .or_else(|_| {
-                // Try common system paths
-                let paths = vec![
-                    "/usr/bin/winetricks",
-                    "/usr/local/bin/winetricks",
-                    "/opt/winetricks/bin/winetricks",
-                ];
+        let winetricks_path = which("winetricks").or_else(|_| {
+            // Try common system paths
+            let paths = vec![
+                "/usr/bin/winetricks",
+                "/usr/local/bin/winetricks",
+                "/opt/winetricks/bin/winetricks",
+            ];
 
-                for path in paths {
-                    if std::fs::metadata(path).is_ok() {
-                        return Ok(PathBuf::from(path));
-                    }
+            for path in paths {
+                if std::fs::metadata(path).is_ok() {
+                    return Ok(PathBuf::from(path));
                 }
+            }
 
-                Err(anyhow::anyhow!("winetricks not found"))
-            })?;
+            Err(anyhow::anyhow!("winetricks not found"))
+        })?;
 
         std::fs::create_dir_all(&cache_dir)?;
 
@@ -86,7 +85,11 @@ impl WinetricksManager {
                 description: "Visual C++ 2019 Redistributable".to_string(),
                 category: WinetrickCategory::Runtime,
                 size_mb: Some(25),
-                required_for: vec!["battle.net".to_string(), "world_of_warcraft".to_string(), "diablo".to_string()],
+                required_for: vec![
+                    "battle.net".to_string(),
+                    "world_of_warcraft".to_string(),
+                    "diablo".to_string(),
+                ],
                 conflicts_with: vec!["vcrun2022".to_string()],
                 wine_versions: vec!["all".to_string()],
             },
@@ -122,7 +125,11 @@ impl WinetricksManager {
                 description: "DirectX to Vulkan translation layer".to_string(),
                 category: WinetrickCategory::Library,
                 size_mb: Some(50),
-                required_for: vec!["world_of_warcraft".to_string(), "overwatch".to_string(), "diablo".to_string()],
+                required_for: vec![
+                    "world_of_warcraft".to_string(),
+                    "overwatch".to_string(),
+                    "diablo".to_string(),
+                ],
                 conflicts_with: vec!["wined3d".to_string()],
                 wine_versions: vec!["wine-4.0+".to_string()],
             },
@@ -170,8 +177,12 @@ impl WinetricksManager {
         pb.set_message(format!("Installing {}", verb.name));
 
         if self.dry_run {
-            println!("🔄 [DRY RUN] Would run: WINEPREFIX={} {} --unattended --force {}",
-                     prefix_path.display(), self.winetricks_path.display(), verb.name);
+            println!(
+                "🔄 [DRY RUN] Would run: WINEPREFIX={} {} --unattended --force {}",
+                prefix_path.display(),
+                self.winetricks_path.display(),
+                verb.name
+            );
 
             // Simulate progress for demo
             let pb_clone = pb.clone();
@@ -229,7 +240,8 @@ impl WinetricksManager {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 return Err(anyhow::anyhow!(
                     "Winetricks command failed: {}\nError: {}",
-                    verb.name, stderr
+                    verb.name,
+                    stderr
                 ));
             }
         }
@@ -291,24 +303,46 @@ impl WinetricksManager {
         let tweaks = vec![
             // Enable Wine staging fsync for better performance
             ("HKEY_CURRENT_USER\\Software\\Wine\\Fsync", "Enable", "1"),
-
             // Set Windows version to 10
             ("HKEY_CURRENT_USER\\Software\\Wine", "Version", "win10"),
-
             // DirectSound optimizations
-            ("HKEY_CURRENT_USER\\Software\\Wine\\DirectSound", "HardwareAcceleration", "Full"),
-            ("HKEY_CURRENT_USER\\Software\\Wine\\DirectSound", "DefaultBitsPerSample", "16"),
-            ("HKEY_CURRENT_USER\\Software\\Wine\\DirectSound", "DefaultSampleRate", "44100"),
-
+            (
+                "HKEY_CURRENT_USER\\Software\\Wine\\DirectSound",
+                "HardwareAcceleration",
+                "Full",
+            ),
+            (
+                "HKEY_CURRENT_USER\\Software\\Wine\\DirectSound",
+                "DefaultBitsPerSample",
+                "16",
+            ),
+            (
+                "HKEY_CURRENT_USER\\Software\\Wine\\DirectSound",
+                "DefaultSampleRate",
+                "44100",
+            ),
             // Direct3D optimizations
-            ("HKEY_CURRENT_USER\\Software\\Wine\\Direct3D", "VideoMemorySize", "8192"), // 8GB VRAM
-            ("HKEY_CURRENT_USER\\Software\\Wine\\Direct3D", "OffscreenRenderingMode", "fbo"),
+            (
+                "HKEY_CURRENT_USER\\Software\\Wine\\Direct3D",
+                "VideoMemorySize",
+                "8192",
+            ), // 8GB VRAM
+            (
+                "HKEY_CURRENT_USER\\Software\\Wine\\Direct3D",
+                "OffscreenRenderingMode",
+                "fbo",
+            ),
         ];
 
         for (key, value, data) in tweaks {
             // SAFETY: Only simulate registry changes for demo
-            println!("🔄 [DEMO MODE] Would run: WINEPREFIX={} wine reg add '{}' /v '{}' /d '{}' /f",
-                     prefix_path.display(), key, value, data);
+            println!(
+                "🔄 [DEMO MODE] Would run: WINEPREFIX={} wine reg add '{}' /v '{}' /d '{}' /f",
+                prefix_path.display(),
+                key,
+                value,
+                data
+            );
             println!("   ✅ [SIMULATED] Set {}/{} = {}", key, value, data);
         }
 
@@ -316,24 +350,19 @@ impl WinetricksManager {
     }
 
     pub fn get_verb_info(&self, verb_name: &str) -> Option<WinetrickVerb> {
-        let all_verbs = [
-            Self::get_battlenet_essentials(),
-            Self::get_wow_specific(),
-        ].concat();
+        let all_verbs = [Self::get_battlenet_essentials(), Self::get_wow_specific()].concat();
 
         all_verbs.into_iter().find(|v| v.name == verb_name)
     }
 
     pub fn check_conflicts(&self, verbs: &[String]) -> Vec<String> {
         let mut conflicts = Vec::new();
-        let all_verbs: HashMap<String, WinetrickVerb> = [
-            Self::get_battlenet_essentials(),
-            Self::get_wow_specific(),
-        ]
-        .concat()
-        .into_iter()
-        .map(|v| (v.name.clone(), v))
-        .collect();
+        let all_verbs: HashMap<String, WinetrickVerb> =
+            [Self::get_battlenet_essentials(), Self::get_wow_specific()]
+                .concat()
+                .into_iter()
+                .map(|v| (v.name.clone(), v))
+                .collect();
 
         for verb_name in verbs {
             if let Some(verb) = all_verbs.get(verb_name) {
@@ -348,16 +377,26 @@ impl WinetricksManager {
         conflicts
     }
 
-    pub async fn create_battlenet_prefix(&self, prefix_path: &Path, wine_version: Option<&str>) -> Result<()> {
-        println!("🍷 Creating new Battle.net Wine prefix at: {}", prefix_path.display());
+    pub async fn create_battlenet_prefix(
+        &self,
+        prefix_path: &Path,
+        wine_version: Option<&str>,
+    ) -> Result<()> {
+        println!(
+            "🍷 Creating new Battle.net Wine prefix at: {}",
+            prefix_path.display()
+        );
 
         // Create the prefix directory
         std::fs::create_dir_all(prefix_path)?;
 
         // SAFETY: Only simulate Wine prefix creation for demo
         let wine_cmd = wine_version.unwrap_or("wine");
-        println!("🔄 [DEMO MODE] Would run: WINEPREFIX={} WINEARCH=win64 {} wineboot --init",
-                 prefix_path.display(), wine_cmd);
+        println!(
+            "🔄 [DEMO MODE] Would run: WINEPREFIX={} WINEARCH=win64 {} wineboot --init",
+            prefix_path.display(),
+            wine_cmd
+        );
 
         println!("⏳ [SIMULATING] Initializing Wine prefix...");
         thread::sleep(Duration::from_millis(1500)); // Simulate work
@@ -369,7 +408,10 @@ impl WinetricksManager {
 
         println!("\n🎉 Battle.net prefix setup complete!");
         println!("You can now install Battle.net in this prefix:");
-        println!("  WINEPREFIX={} wine /path/to/Battle.net-Setup.exe", prefix_path.display());
+        println!(
+            "  WINEPREFIX={} wine /path/to/Battle.net-Setup.exe",
+            prefix_path.display()
+        );
 
         Ok(())
     }
@@ -383,7 +425,10 @@ impl WinetricksManager {
         let checks = vec![
             ("corefonts", "drive_c/windows/Fonts/arial.ttf"),
             ("vcrun2019", "drive_c/windows/system32/vcruntime140.dll"),
-            ("dotnet48", "drive_c/windows/Microsoft.NET/Framework64/v4.0.30319"),
+            (
+                "dotnet48",
+                "drive_c/windows/Microsoft.NET/Framework64/v4.0.30319",
+            ),
         ];
 
         for (verb, check_path) in checks {
@@ -399,11 +444,16 @@ impl WinetricksManager {
 
 // Utility functions for specific game setups
 pub async fn setup_wow_prefix(prefix_path: &Path, wine_version: Option<&str>) -> Result<()> {
-    let cache_dir = dirs::cache_dir().unwrap().join("ghostforge").join("winetricks");
+    let cache_dir = dirs::cache_dir()
+        .unwrap()
+        .join("ghostforge")
+        .join("winetricks");
     let manager = WinetricksManager::new(cache_dir)?;
 
     // Create prefix and install essentials
-    manager.create_battlenet_prefix(prefix_path, wine_version).await?;
+    manager
+        .create_battlenet_prefix(prefix_path, wine_version)
+        .await?;
 
     // Apply WoW-specific optimizations
     manager.optimize_for_wow(prefix_path).await?;
@@ -416,11 +466,16 @@ pub async fn setup_wow_prefix(prefix_path: &Path, wine_version: Option<&str>) ->
 }
 
 pub async fn setup_diablo_prefix(prefix_path: &Path, wine_version: Option<&str>) -> Result<()> {
-    let cache_dir = dirs::cache_dir().unwrap().join("ghostforge").join("winetricks");
+    let cache_dir = dirs::cache_dir()
+        .unwrap()
+        .join("ghostforge")
+        .join("winetricks");
     let manager = WinetricksManager::new(cache_dir)?;
 
     // Create prefix with essentials
-    manager.create_battlenet_prefix(prefix_path, wine_version).await?;
+    manager
+        .create_battlenet_prefix(prefix_path, wine_version)
+        .await?;
 
     // Install vcrun2022 for Diablo IV
     let vcrun2022 = WinetrickVerb {

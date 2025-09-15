@@ -1,7 +1,9 @@
-#[cfg(feature = "gui")]
-use eframe::egui;
+#[cfg(feature = "container-bolt")]
+use crate::bolt_integration::{BoltGameManager, BoltSystemMetrics, ContainerStatus, GameContainer};
 #[cfg(feature = "gui")]
 use anyhow::Result;
+#[cfg(feature = "gui")]
+use eframe::egui;
 #[cfg(feature = "gui")]
 use poll_promise::Promise;
 #[cfg(feature = "gui")]
@@ -10,24 +12,32 @@ use poll_promise::Promise;
 use std::sync::Arc;
 #[cfg(feature = "gui")]
 use std::time::{Duration, Instant};
-#[cfg(feature = "container-bolt")]
-use crate::bolt_integration::{BoltGameManager, GameContainer, BoltSystemMetrics, ContainerStatus};
 
 // Mock types when Bolt is not available
 #[cfg(all(feature = "gui", not(feature = "container-bolt")))]
 mod mock_bolt {
-    use std::sync::Arc;
     use chrono::{DateTime, Utc};
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
+    use std::sync::Arc;
 
     #[derive(Debug, Clone)]
     pub struct BoltGameManager;
 
     impl BoltGameManager {
-        pub fn default() -> Self { Self }
-        pub fn get_containers(&self) -> Vec<GameContainer> { vec![] }
-        pub fn get_cached_metrics(&self) -> Option<BoltSystemMetrics> { None }
-        pub async fn launch_game(&self, _id: &str, _game: &crate::game::Game) -> anyhow::Result<String> {
+        pub fn default() -> Self {
+            Self
+        }
+        pub fn get_containers(&self) -> Vec<GameContainer> {
+            vec![]
+        }
+        pub fn get_cached_metrics(&self) -> Option<BoltSystemMetrics> {
+            None
+        }
+        pub async fn launch_game(
+            &self,
+            _id: &str,
+            _game: &crate::game::Game,
+        ) -> anyhow::Result<String> {
             Err(anyhow::anyhow!("Bolt not enabled"))
         }
         pub async fn stop_game(&self, _id: &str) -> anyhow::Result<()> {
@@ -72,12 +82,12 @@ mod mock_bolt {
 }
 
 #[cfg(all(feature = "gui", not(feature = "container-bolt")))]
-use mock_bolt::{BoltGameManager, GameContainer, BoltSystemMetrics, ContainerStatus};
+use mock_bolt::{BoltGameManager, BoltSystemMetrics, ContainerStatus, GameContainer};
 
 #[cfg(feature = "gui")]
-use crate::display::{DisplayManager, Display, DisplayProfile, GamingDisplaySettings};
+use crate::display::{DisplayManager, GamingDisplaySettings, VsyncMode};
 #[cfg(feature = "gui")]
-use crate::vrr_monitor::{VrrMonitor, DisplayMetrics, GamingPerformanceReport};
+use crate::vrr_monitor::VrrMonitor;
 
 #[cfg(feature = "gui")]
 pub struct GhostForgeApp {
@@ -124,8 +134,8 @@ enum Tab {
     ProtonDB,
     Wine,
     Graphics,
-    Containers,  // New Bolt container management tab
-    Display,     // Display and VRR management
+    Containers, // New Bolt container management tab
+    Display,    // Display and VRR management
     Settings,
 }
 
@@ -172,7 +182,7 @@ impl Default for GhostForgeApp {
             vrr_monitor: VrrMonitor::default(),
             gaming_display_settings: GamingDisplaySettings {
                 target_fps: 120,
-                vsync_mode: crate::display::VsyncMode::Adaptive,
+                vsync_mode: VsyncMode::Adaptive,
                 frame_pacing: true,
                 low_latency_mode: true,
                 hdr_gaming: false,
@@ -234,7 +244,10 @@ impl eframe::App for GhostForgeApp {
                             if let Some(_info) = &self.system_info {
                                 ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "🟢 Ready");
                             } else {
-                                ui.colored_label(egui::Color32::from_rgb(255, 193, 7), "🟡 Loading...");
+                                ui.colored_label(
+                                    egui::Color32::from_rgb(255, 193, 7),
+                                    "🟡 Loading...",
+                                );
                             }
                         });
                     });
@@ -253,9 +266,11 @@ impl eframe::App for GhostForgeApp {
                 // App logo/title section
                 ui.vertical_centered(|ui| {
                     ui.add_space(4.0);
-                    ui.label(egui::RichText::new("🎮 GhostForge")
-                        .size(18.0)
-                        .color(egui::Color32::from_rgb(100, 181, 246)));
+                    ui.label(
+                        egui::RichText::new("🎮 GhostForge")
+                            .size(18.0)
+                            .color(egui::Color32::from_rgb(100, 181, 246)),
+                    );
                     ui.small("Gaming Manager v0.1.0");
                     ui.add_space(8.0);
                 });
@@ -263,117 +278,146 @@ impl eframe::App for GhostForgeApp {
                 ui.separator();
                 ui.add_space(8.0);
 
-            // Main navigation with enhanced styling
-            ui.label(egui::RichText::new("Navigation")
-                .size(14.0)
-                .color(egui::Color32::from_rgb(176, 190, 210)));
-            ui.add_space(4.0);
+                // Main navigation with enhanced styling
+                ui.label(
+                    egui::RichText::new("Navigation")
+                        .size(14.0)
+                        .color(egui::Color32::from_rgb(176, 190, 210)),
+                );
+                ui.add_space(4.0);
 
-            // Custom navigation buttons with better styling
-            let nav_items = [
-                (Tab::Dashboard, "📊", "Dashboard"),
-                (Tab::Games, "🎯", "Games"),
-                (Tab::Containers, "📦", "Containers"),
-                (Tab::Display, "🖼️", "Display/VRR"),
-                (Tab::ProtonDB, "🌐", "ProtonDB"),
-                (Tab::Wine, "🍷", "Wine/Proton"),
-                (Tab::Graphics, "🖥️", "Graphics"),
-                (Tab::Settings, "⚙️", "Settings"),
-            ];
-
-            for (tab, icon, name) in nav_items {
-                let is_selected = self.current_tab == tab;
-                let button_color = if is_selected {
-                    egui::Color32::from_rgb(100, 181, 246)
-                } else {
-                    egui::Color32::from_rgb(176, 190, 210)
-                };
-
-                ui.horizontal(|ui| {
-                    ui.add_space(8.0);
-                    if ui.add_sized([180.0, 32.0],
-                        egui::Button::new(
-                            egui::RichText::new(format!("{} {}", icon, name))
-                                .color(button_color)
-                                .size(13.0)
-                        )
-                        .fill(if is_selected {
-                            egui::Color32::from_rgb(52, 69, 94)
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        })
-                        .rounding(egui::Rounding::same(6.0))
-                    ).clicked() {
-                        self.current_tab = tab;
-                    }
-                });
-                ui.add_space(2.0);
-            }
-
-            ui.add_space(16.0);
-            ui.separator();
-            ui.add_space(8.0);
-
-            // Game categories (like Lutris sidebar)
-            ui.label(egui::RichText::new("Categories")
-                .size(14.0)
-                .color(egui::Color32::from_rgb(176, 190, 210)));
-            ui.add_space(4.0);
-
-            ui.indent("categories", |ui| {
-                let categories = [
-                    ("📦", "All Games"),
-                    ("✅", "Installed"),
-                    ("▶️", "Running"),
-                    ("🕓", "Recently Played"),
-                    ("♥️", "Favorites"),
+                // Custom navigation buttons with better styling
+                let nav_items = [
+                    (Tab::Dashboard, "📊", "Dashboard"),
+                    (Tab::Games, "🎯", "Games"),
+                    (Tab::Containers, "📦", "Containers"),
+                    (Tab::Display, "🖼️", "Display/VRR"),
+                    (Tab::ProtonDB, "🌐", "ProtonDB"),
+                    (Tab::Wine, "🍷", "Wine/Proton"),
+                    (Tab::Graphics, "🖥️", "Graphics"),
+                    (Tab::Settings, "⚙️", "Settings"),
                 ];
 
-                for (icon, name) in categories {
-                    ui.horizontal(|ui| {
-                        ui.add_space(4.0);
-                        let _ = ui.selectable_label(false,
-                            egui::RichText::new(format!("{} {}", icon, name))
-                                .size(12.0)
-                                .color(egui::Color32::from_rgb(176, 190, 210))
-                        );
-                    });
-                    ui.add_space(1.0);
-                }
-            });
-
-            ui.separator();
-
-            // Launchers (like Lutris services)
-            ui.label("Launchers:");
-            ui.indent("launchers", |ui| {
-                for launcher in &self.launchers {
-                    let icon = match launcher.launcher_type {
-                        crate::launcher::LauncherType::Steam => "🔵",
-                        crate::launcher::LauncherType::BattleNet => "🔷",
-                        crate::launcher::LauncherType::Epic => "⚫",
-                        crate::launcher::LauncherType::GOG => "🟣",
-                        _ => "📦",
+                for (tab, icon, name) in nav_items {
+                    let is_selected = self.current_tab == tab;
+                    let button_color = if is_selected {
+                        egui::Color32::from_rgb(100, 181, 246)
+                    } else {
+                        egui::Color32::from_rgb(176, 190, 210)
                     };
-                    ui.selectable_label(false, format!("{} {}", icon, launcher.name));
+
+                    ui.horizontal(|ui| {
+                        ui.add_space(8.0);
+                        if ui
+                            .add_sized(
+                                [180.0, 32.0],
+                                egui::Button::new(
+                                    egui::RichText::new(format!("{} {}", icon, name))
+                                        .color(button_color)
+                                        .size(13.0),
+                                )
+                                .fill(if is_selected {
+                                    egui::Color32::from_rgb(52, 69, 94)
+                                } else {
+                                    egui::Color32::TRANSPARENT
+                                })
+                                .rounding(egui::Rounding::same(6.0)),
+                            )
+                            .clicked()
+                        {
+                            self.current_tab = tab;
+                        }
+                    });
+                    ui.add_space(2.0);
                 }
-                if self.launchers.is_empty() {
-                    ui.small("No launchers detected");
+
+                ui.add_space(16.0);
+                ui.separator();
+                ui.add_space(8.0);
+
+                // Game categories (like Lutris sidebar)
+                ui.label(
+                    egui::RichText::new("Categories")
+                        .size(14.0)
+                        .color(egui::Color32::from_rgb(176, 190, 210)),
+                );
+                ui.add_space(4.0);
+
+                ui.indent("categories", |ui| {
+                    let categories = [
+                        ("📦", "All Games"),
+                        ("✅", "Installed"),
+                        ("▶️", "Running"),
+                        ("🕓", "Recently Played"),
+                        ("♥️", "Favorites"),
+                    ];
+
+                    for (icon, name) in categories {
+                        ui.horizontal(|ui| {
+                            ui.add_space(4.0);
+                            let _ = ui.selectable_label(
+                                false,
+                                egui::RichText::new(format!("{} {}", icon, name))
+                                    .size(12.0)
+                                    .color(egui::Color32::from_rgb(176, 190, 210)),
+                            );
+                        });
+                        ui.add_space(1.0);
+                    }
+                });
+
+                ui.separator();
+
+                // Launchers (like Lutris services)
+                ui.label("Launchers:");
+                ui.indent("launchers", |ui| {
+                    for launcher in &self.launchers {
+                        let icon = match launcher.launcher_type {
+                            crate::launcher::LauncherType::Steam => "🔵",
+                            crate::launcher::LauncherType::BattleNet => "🔷",
+                            crate::launcher::LauncherType::Epic => "⚫",
+                            crate::launcher::LauncherType::GOG => "🟣",
+                            _ => "📦",
+                        };
+                        ui.selectable_label(false, format!("{} {}", icon, launcher.name));
+                    }
+                    if self.launchers.is_empty() {
+                        ui.small("No launchers detected");
+                    }
+                });
+
+                ui.separator();
+
+                // System status
+                ui.label("System Status:");
+                if let Some(info) = &self.system_info {
+                    ui.small(format!(
+                        "🟢 Wine: {}",
+                        info.wine_support
+                            .version
+                            .as_ref()
+                            .unwrap_or(&"Available".to_string())
+                    ));
+                    ui.small(format!(
+                        "🟢 Vulkan: {}",
+                        if info.vulkan.available {
+                            "Ready"
+                        } else {
+                            "Not available"
+                        }
+                    ));
+                    ui.small(format!(
+                        "🟢 DXVK: {}",
+                        if info.gaming_tools.dxvk {
+                            "Ready"
+                        } else {
+                            "Not installed"
+                        }
+                    ));
+                } else {
+                    ui.small("🔄 Loading system info...");
                 }
             });
-
-            ui.separator();
-
-            // System status
-            ui.label("System Status:");
-            if let Some(info) = &self.system_info {
-                ui.small(format!("🟢 Wine: {}", info.wine_support.version.as_ref().unwrap_or(&"Available".to_string())));
-                ui.small(format!("🟢 Vulkan: {}", if info.vulkan.available { "Ready" } else { "Not available" }));
-                ui.small(format!("🟢 DXVK: {}", if info.gaming_tools.dxvk { "Ready" } else { "Not installed" }));
-            } else {
-                ui.small("🔄 Loading system info...");
-            }
-        });
 
         // Auto-refresh containers and metrics every 5 seconds
         if self.last_refresh.elapsed() > Duration::from_secs(5) {
@@ -440,16 +484,16 @@ impl GhostForgeApp {
         let mut visuals = egui::Visuals::dark();
 
         // Material Ocean Blue color palette
-        let primary_bg = egui::Color32::from_rgb(18, 25, 38);      // Dark ocean blue
-        let secondary_bg = egui::Color32::from_rgb(26, 35, 52);    // Lighter ocean blue
-        let accent_bg = egui::Color32::from_rgb(34, 45, 65);       // Medium ocean blue
-        let surface_bg = egui::Color32::from_rgb(42, 55, 78);      // Surface blue
+        let primary_bg = egui::Color32::from_rgb(18, 25, 38); // Dark ocean blue
+        let secondary_bg = egui::Color32::from_rgb(26, 35, 52); // Lighter ocean blue
+        let accent_bg = egui::Color32::from_rgb(34, 45, 65); // Medium ocean blue
+        let surface_bg = egui::Color32::from_rgb(42, 55, 78); // Surface blue
         let primary_text = egui::Color32::from_rgb(240, 246, 252); // Light text
         let secondary_text = egui::Color32::from_rgb(176, 190, 210); // Secondary text
-        let accent_color = egui::Color32::from_rgb(100, 181, 246);  // Light blue accent
-        let _success_color = egui::Color32::from_rgb(76, 175, 80);   // Green
-        let _warning_color = egui::Color32::from_rgb(255, 193, 7);   // Amber
-        let _error_color = egui::Color32::from_rgb(244, 67, 54);     // Red
+        let accent_color = egui::Color32::from_rgb(100, 181, 246); // Light blue accent
+        let _success_color = egui::Color32::from_rgb(76, 175, 80); // Green
+        let _warning_color = egui::Color32::from_rgb(255, 193, 7); // Amber
+        let _error_color = egui::Color32::from_rgb(244, 67, 54); // Red
 
         // Apply colors
         visuals.window_fill = primary_bg;
@@ -550,7 +594,9 @@ impl GhostForgeApp {
                             id: "steam_730".to_string(),
                             name: "Counter-Strike 2".to_string(),
                             executable: std::path::PathBuf::from("csgo.exe"),
-                            install_path: std::path::PathBuf::from("/home/user/.steam/steamapps/common/Counter-Strike Global Offensive"),
+                            install_path: std::path::PathBuf::from(
+                                "/home/user/.steam/steamapps/common/Counter-Strike Global Offensive",
+                            ),
                             launcher: Some("Steam".to_string()),
                             launcher_id: Some("730".to_string()),
                             wine_version: None,
@@ -574,11 +620,15 @@ impl GhostForgeApp {
                             id: "battlenet_wow".to_string(),
                             name: "World of Warcraft".to_string(),
                             executable: std::path::PathBuf::from("Wow.exe"),
-                            install_path: std::path::PathBuf::from("/home/user/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft"),
+                            install_path: std::path::PathBuf::from(
+                                "/home/user/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft",
+                            ),
                             launcher: Some("Battle.net".to_string()),
                             launcher_id: Some("wow".to_string()),
                             wine_version: Some("GE-Proton9-2".to_string()),
-                            wine_prefix: Some(std::path::PathBuf::from("/home/user/Games/battlenet")),
+                            wine_prefix: Some(std::path::PathBuf::from(
+                                "/home/user/Games/battlenet",
+                            )),
                             icon: None,
                             banner: None,
                             launch_arguments: vec![],
@@ -612,7 +662,10 @@ impl GhostForgeApp {
 
         self.loading_wine = true;
 
-        let wine_dir = dirs::data_dir().unwrap_or_default().join("ghostforge").join("wine-versions");
+        let wine_dir = dirs::data_dir()
+            .unwrap_or_default()
+            .join("ghostforge")
+            .join("wine-versions");
         let config_dir = dirs::config_dir().unwrap_or_default().join("ghostforge");
         let manager = crate::wine::WineManager::new(wine_dir, config_dir);
 
@@ -638,12 +691,16 @@ impl GhostForgeApp {
             crate::wine::WineVersion {
                 name: "Proton GE 9-2".to_string(),
                 version: "9.2".to_string(),
-                path: std::path::PathBuf::from("/home/user/.local/share/ghostforge/wine-versions/GE-Proton9-2"),
+                path: std::path::PathBuf::from(
+                    "/home/user/.local/share/ghostforge/wine-versions/GE-Proton9-2",
+                ),
                 wine_type: crate::wine::WineType::ProtonGE,
                 arch: vec!["win64".to_string()],
                 installed: true,
                 system: false,
-                download_url: Some("https://github.com/GloriousEggroll/proton-ge-custom/releases/".to_string()),
+                download_url: Some(
+                    "https://github.com/GloriousEggroll/proton-ge-custom/releases/".to_string(),
+                ),
                 checksum: None,
             },
         ];
@@ -684,7 +741,8 @@ impl GhostForgeApp {
                     let running_count = if let Some(metrics) = &self.bolt_metrics {
                         metrics.running_containers
                     } else {
-                        self.game_containers.iter()
+                        self.game_containers
+                            .iter()
                             .filter(|c| matches!(c.status, ContainerStatus::Running))
                             .count()
                     };
@@ -714,18 +772,55 @@ impl GhostForgeApp {
                             ui.label(format!("💻 OS: {}", info.os));
                             ui.label(format!("⚙️ Kernel: {}", info.kernel));
                             ui.label(format!("🖼️ CPU: {}", info.cpu.brand));
-                            ui.label(format!("💾 RAM: {:.1} GB", info.memory.total as f64 / (1024.0 * 1024.0 * 1024.0)));
+                            ui.label(format!(
+                                "💾 RAM: {:.1} GB",
+                                info.memory.total as f64 / (1024.0 * 1024.0 * 1024.0)
+                            ));
 
                             if !info.gpu.is_empty() {
                                 ui.label(format!("🖥️ GPU: {}", info.gpu[0].name));
-                                ui.label(format!("    Driver: {}", info.gpu[0].driver.as_ref().unwrap_or(&"Unknown".to_string())));
+                                ui.label(format!(
+                                    "    Driver: {}",
+                                    info.gpu[0]
+                                        .driver
+                                        .as_ref()
+                                        .unwrap_or(&"Unknown".to_string())
+                                ));
                             }
 
                             ui.separator();
-                            ui.label(format!("🍷 Wine: {}", if info.wine_support.installed { "Installed" } else { "Not installed" }));
-                            ui.label(format!("🌋 Vulkan: {}", if info.vulkan.available { "Available" } else { "Not available" }));
-                            ui.label(format!("🖥️ DXVK: {}", if info.gaming_tools.dxvk { "Installed" } else { "Not installed" }));
-                            ui.label(format!("🎮 GameMode: {}", if info.gaming_tools.gamemode { "Available" } else { "Not available" }));
+                            ui.label(format!(
+                                "🍷 Wine: {}",
+                                if info.wine_support.installed {
+                                    "Installed"
+                                } else {
+                                    "Not installed"
+                                }
+                            ));
+                            ui.label(format!(
+                                "🌋 Vulkan: {}",
+                                if info.vulkan.available {
+                                    "Available"
+                                } else {
+                                    "Not available"
+                                }
+                            ));
+                            ui.label(format!(
+                                "🖥️ DXVK: {}",
+                                if info.gaming_tools.dxvk {
+                                    "Installed"
+                                } else {
+                                    "Not installed"
+                                }
+                            ));
+                            ui.label(format!(
+                                "🎮 GameMode: {}",
+                                if info.gaming_tools.gamemode {
+                                    "Available"
+                                } else {
+                                    "Not available"
+                                }
+                            ));
                         });
                     });
                 } else {
@@ -767,7 +862,9 @@ impl GhostForgeApp {
                 ui.group(|ui| {
                     ui.vertical(|ui| {
                         // Show running containers first
-                        let running_containers: Vec<_> = self.game_containers.iter()
+                        let running_containers: Vec<_> = self
+                            .game_containers
+                            .iter()
                             .filter(|c| matches!(c.status, ContainerStatus::Running))
                             .collect();
 
@@ -777,21 +874,30 @@ impl GhostForgeApp {
                                 ui.horizontal(|ui| {
                                     ui.label("📦");
                                     ui.label(&container.name);
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        ui.small("Running");
-                                        if ui.small_button("⏹️").clicked() {
-                                            let bolt_manager: Arc<BoltGameManager> = Arc::clone(&self.bolt_manager);
-                                            let container_id = container.id.clone();
-                                            let ctx = ui.ctx().clone();
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.small("Running");
+                                            if ui.small_button("⏹️").clicked() {
+                                                let bolt_manager: Arc<BoltGameManager> =
+                                                    Arc::clone(&self.bolt_manager);
+                                                let container_id = container.id.clone();
+                                                let ctx = ui.ctx().clone();
 
-                                            tokio::spawn(async move {
-                                                if let Err(e) = bolt_manager.stop_game(&container_id).await {
-                                                    eprintln!("Failed to stop container: {}", e);
-                                                }
-                                                ctx.request_repaint();
-                                            });
-                                        }
-                                    });
+                                                tokio::spawn(async move {
+                                                    if let Err(e) =
+                                                        bolt_manager.stop_game(&container_id).await
+                                                    {
+                                                        eprintln!(
+                                                            "Failed to stop container: {}",
+                                                            e
+                                                        );
+                                                    }
+                                                    ctx.request_repaint();
+                                                });
+                                            }
+                                        },
+                                    );
                                 });
                             }
                             ui.separator();
@@ -807,21 +913,25 @@ impl GhostForgeApp {
                                 ui.horizontal(|ui| {
                                     ui.label("🎮");
                                     ui.label(&game.name);
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if let Some(last_played) = &game.last_played {
-                                            let duration = chrono::Utc::now().signed_duration_since(*last_played);
-                                            let time_str = if duration.num_days() > 0 {
-                                                format!("{} days ago", duration.num_days())
-                                            } else if duration.num_hours() > 0 {
-                                                format!("{} hours ago", duration.num_hours())
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if let Some(last_played) = &game.last_played {
+                                                let duration = chrono::Utc::now()
+                                                    .signed_duration_since(*last_played);
+                                                let time_str = if duration.num_days() > 0 {
+                                                    format!("{} days ago", duration.num_days())
+                                                } else if duration.num_hours() > 0 {
+                                                    format!("{} hours ago", duration.num_hours())
+                                                } else {
+                                                    "Recently".to_string()
+                                                };
+                                                ui.small(time_str);
                                             } else {
-                                                "Recently".to_string()
-                                            };
-                                            ui.small(time_str);
-                                        } else {
-                                            ui.small("Never played");
-                                        }
-                                    });
+                                                ui.small("Never played");
+                                            }
+                                        },
+                                    );
                                 });
                             }
                         }
@@ -839,10 +949,18 @@ impl GhostForgeApp {
                 let grid_selected = self.view_mode == ViewMode::Grid;
                 let list_selected = self.view_mode == ViewMode::List;
 
-                if ui.selectable_label(grid_selected, "🗺️").on_hover_text("Grid View").clicked() {
+                if ui
+                    .selectable_label(grid_selected, "🗺️")
+                    .on_hover_text("Grid View")
+                    .clicked()
+                {
                     self.view_mode = ViewMode::Grid;
                 }
-                if ui.selectable_label(list_selected, "📊").on_hover_text("List View").clicked() {
+                if ui
+                    .selectable_label(list_selected, "📊")
+                    .on_hover_text("List View")
+                    .clicked()
+                {
                     self.view_mode = ViewMode::List;
                 }
                 ui.separator();
@@ -902,7 +1020,8 @@ impl GhostForgeApp {
                         // Game grid layout (like Lutris grid view)
                         let available_width = ui.available_width();
                         let card_width = 250.0;
-                        let cards_per_row = ((available_width / (card_width + 10.0)).floor() as usize).max(1);
+                        let cards_per_row =
+                            ((available_width / (card_width + 10.0)).floor() as usize).max(1);
 
                         // Clone games to avoid borrowing issues
                         let games = self.games.clone();
@@ -951,7 +1070,10 @@ impl GhostForgeApp {
         }
 
         // Wine versions list
-        ui.label(format!("Installed Wine Versions ({}):", self.wine_versions.len()));
+        ui.label(format!(
+            "Installed Wine Versions ({}):",
+            self.wine_versions.len()
+        ));
         egui::ScrollArea::vertical().show(ui, |ui| {
             if self.loading_wine {
                 ui.horizontal(|ui| {
@@ -989,30 +1111,41 @@ impl GhostForgeApp {
                                 ui.small(format!("Version: {}", version.version));
                                 ui.small(format!("Architecture: {}", version.arch.join(", ")));
                                 if let Some(url) = &version.download_url {
-                                    ui.small(format!("Source: {}", if url.contains("github") { "GitHub" } else { "Custom" }));
+                                    ui.small(format!(
+                                        "Source: {}",
+                                        if url.contains("github") {
+                                            "GitHub"
+                                        } else {
+                                            "Custom"
+                                        }
+                                    ));
                                 }
                             });
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if !version.system {
-                                    if ui.small_button("🗑").on_hover_text("Remove").clicked() {
-                                        // TODO: Remove wine version
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if !version.system {
+                                        if ui.small_button("🗑").on_hover_text("Remove").clicked()
+                                        {
+                                            // TODO: Remove wine version
+                                        }
                                     }
-                                }
 
-                                if ui.small_button("📊").on_hover_text("Details").clicked() {
-                                    // TODO: Show version details
-                                }
+                                    if ui.small_button("📊").on_hover_text("Details").clicked() {
+                                        // TODO: Show version details
+                                    }
 
-                                // Status indicator
-                                if version.system {
-                                    ui.small("(System)");
-                                } else if version.installed {
-                                    ui.colored_label(egui::Color32::GREEN, "(Installed)");
-                                } else {
-                                    ui.colored_label(egui::Color32::GRAY, "(Available)");
-                                }
-                            });
+                                    // Status indicator
+                                    if version.system {
+                                        ui.small("(System)");
+                                    } else if version.installed {
+                                        ui.colored_label(egui::Color32::GREEN, "(Installed)");
+                                    } else {
+                                        ui.colored_label(egui::Color32::GRAY, "(Available)");
+                                    }
+                                },
+                            );
                         });
                     });
                 }
@@ -1151,23 +1284,38 @@ impl GhostForgeApp {
                                 ui.label(format!("Reports: {}", game.total_reports));
                             });
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                // Compatibility tier
-                                let (tier_color, tier_text) = match game.tier {
-                                    crate::protondb::ProtonDBTier::Platinum => (egui::Color32::from_rgb(220, 220, 220), "🟢 Platinum"),
-                                    crate::protondb::ProtonDBTier::Gold => (egui::Color32::from_rgb(255, 215, 0), "🟡 Gold"),
-                                    crate::protondb::ProtonDBTier::Silver => (egui::Color32::from_rgb(192, 192, 192), "🟠 Silver"),
-                                    crate::protondb::ProtonDBTier::Bronze => (egui::Color32::from_rgb(205, 127, 50), "🔴 Bronze"),
-                                    crate::protondb::ProtonDBTier::Borked => (egui::Color32::from_rgb(255, 0, 0), "💀 Borked"),
-                                    crate::protondb::ProtonDBTier::Pending => (egui::Color32::from_rgb(128, 128, 128), "❓ Pending"),
-                                };
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    // Compatibility tier
+                                    let (tier_color, tier_text) = match game.tier {
+                                        crate::protondb::ProtonDBTier::Platinum => {
+                                            (egui::Color32::from_rgb(220, 220, 220), "🟢 Platinum")
+                                        }
+                                        crate::protondb::ProtonDBTier::Gold => {
+                                            (egui::Color32::from_rgb(255, 215, 0), "🟡 Gold")
+                                        }
+                                        crate::protondb::ProtonDBTier::Silver => {
+                                            (egui::Color32::from_rgb(192, 192, 192), "🟠 Silver")
+                                        }
+                                        crate::protondb::ProtonDBTier::Bronze => {
+                                            (egui::Color32::from_rgb(205, 127, 50), "🔴 Bronze")
+                                        }
+                                        crate::protondb::ProtonDBTier::Borked => {
+                                            (egui::Color32::from_rgb(255, 0, 0), "💀 Borked")
+                                        }
+                                        crate::protondb::ProtonDBTier::Pending => {
+                                            (egui::Color32::from_rgb(128, 128, 128), "❓ Pending")
+                                        }
+                                    };
 
-                                ui.colored_label(tier_color, tier_text);
+                                    ui.colored_label(tier_color, tier_text);
 
-                                if ui.button("📋 Details").clicked() {
-                                    // TODO: Show game details
-                                }
-                            });
+                                    if ui.button("📋 Details").clicked() {
+                                        // TODO: Show game details
+                                    }
+                                },
+                            );
                         });
                     });
                 }
@@ -1184,15 +1332,16 @@ impl GhostForgeApp {
         let bolt_manager: Arc<BoltGameManager> = Arc::clone(&self.bolt_manager);
         let ctx = ctx.clone();
 
-        self.container_refresh_promise = Some(Promise::spawn_thread("container_refresh", move || {
-            // Use blocking call instead of async for poll-promise
-            match bolt_manager.get_containers() {
-                containers => {
-                    ctx.request_repaint();
-                    Ok(containers)
+        self.container_refresh_promise =
+            Some(Promise::spawn_thread("container_refresh", move || {
+                // Use blocking call instead of async for poll-promise
+                match bolt_manager.get_containers() {
+                    containers => {
+                        ctx.request_repaint();
+                        Ok(containers)
+                    }
                 }
-            }
-        }));
+            }));
     }
 
     fn refresh_metrics_async(&mut self, ctx: &egui::Context) {
@@ -1230,15 +1379,19 @@ impl GhostForgeApp {
 
                     ui.vertical(|ui| {
                         ui.strong(&game.name);
-                        ui.label(format!("Platform: {}", game.launcher.as_ref().unwrap_or(&"Unknown".to_string())));
+                        ui.label(format!(
+                            "Platform: {}",
+                            game.launcher.as_ref().unwrap_or(&"Unknown".to_string())
+                        ));
                         ui.small(format!("Playtime: {}h", game.playtime_minutes / 60));
                         if game.favorite {
                             ui.small("♥️ Favorite");
                         }
 
                         // Show container status if running
-                        let is_running = self.game_containers.iter()
-                            .any(|c| c.game_id == game.id && matches!(c.status, ContainerStatus::Running));
+                        let is_running = self.game_containers.iter().any(|c| {
+                            c.game_id == game.id && matches!(c.status, ContainerStatus::Running)
+                        });
                         if is_running {
                             ui.colored_label(egui::Color32::GREEN, "🟢 Running");
                         }
@@ -1250,8 +1403,9 @@ impl GhostForgeApp {
                 // Action buttons
                 ui.horizontal(|ui| {
                     // Show container status if running
-                    let is_running = self.game_containers.iter()
-                        .any(|c| c.game_id == game.id && matches!(c.status, ContainerStatus::Running));
+                    let is_running = self.game_containers.iter().any(|c| {
+                        c.game_id == game.id && matches!(c.status, ContainerStatus::Running)
+                    });
 
                     let play_button = if game.install_path.exists() {
                         if is_running {
@@ -1292,7 +1446,8 @@ impl GhostForgeApp {
                             ui.label("♥️");
                         }
                     });
-                    ui.small(format!("{} • {}h played",
+                    ui.small(format!(
+                        "{} • {}h played",
                         game.launcher.as_ref().unwrap_or(&"Unknown".to_string()),
                         game.playtime_minutes / 60
                     ));
@@ -1300,8 +1455,9 @@ impl GhostForgeApp {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     // Show container status
-                    let is_running = self.game_containers.iter()
-                        .any(|c| c.game_id == game.id && matches!(c.status, ContainerStatus::Running));
+                    let is_running = self.game_containers.iter().any(|c| {
+                        c.game_id == game.id && matches!(c.status, ContainerStatus::Running)
+                    });
 
                     if is_running {
                         ui.colored_label(egui::Color32::GREEN, "🟢 Running");
@@ -1328,7 +1484,9 @@ impl GhostForgeApp {
 
     fn handle_game_action(&mut self, game: &crate::game::Game, ctx: &egui::Context) {
         // Check if game is already running
-        let is_running = self.game_containers.iter()
+        let is_running = self
+            .game_containers
+            .iter()
             .any(|c| c.game_id == game.id && matches!(c.status, ContainerStatus::Running));
 
         if is_running {
@@ -1342,7 +1500,10 @@ impl GhostForgeApp {
             tokio::spawn(async move {
                 match bolt_manager.launch_game(&game_clone.id, &game_clone).await {
                     Ok(container_id) => {
-                        println!("🎮 Launched {} in container: {}", game_clone.name, container_id);
+                        println!(
+                            "🎮 Launched {} in container: {}",
+                            game_clone.name, container_id
+                        );
                     }
                     Err(e) => {
                         eprintln!("❌ Failed to launch {}: {}", game_clone.name, e);
@@ -1354,9 +1515,11 @@ impl GhostForgeApp {
     }
 
     fn stop_game_container(&mut self, game_id: &str, ctx: &egui::Context) {
-        if let Some(container) = self.game_containers.iter()
-            .find(|c| c.game_id == game_id && matches!(c.status, ContainerStatus::Running)) {
-
+        if let Some(container) = self
+            .game_containers
+            .iter()
+            .find(|c| c.game_id == game_id && matches!(c.status, ContainerStatus::Running))
+        {
             let bolt_manager: Arc<BoltGameManager> = Arc::clone(&self.bolt_manager);
             let container_id = container.id.clone();
             let ctx = ctx.clone();
@@ -1479,24 +1642,12 @@ impl GhostForgeApp {
                         ui.horizontal(|ui| {
                             // Container status indicator
                             let (status_color, status_icon) = match &container.status {
-                                ContainerStatus::Running => {
-                                    (egui::Color32::GREEN, "🟢")
-                                }
-                                ContainerStatus::Stopped => {
-                                    (egui::Color32::GRAY, "⭕")
-                                }
-                                ContainerStatus::Paused => {
-                                    (egui::Color32::YELLOW, "⏸️")
-                                }
-                                ContainerStatus::Error(_) => {
-                                    (egui::Color32::RED, "❌")
-                                }
-                                ContainerStatus::Creating => {
-                                    (egui::Color32::BLUE, "🔄")
-                                }
-                                ContainerStatus::Updating => {
-                                    (egui::Color32::BLUE, "⬆️")
-                                }
+                                ContainerStatus::Running => (egui::Color32::GREEN, "🟢"),
+                                ContainerStatus::Stopped => (egui::Color32::GRAY, "⭕"),
+                                ContainerStatus::Paused => (egui::Color32::YELLOW, "⏸️"),
+                                ContainerStatus::Error(_) => (egui::Color32::RED, "❌"),
+                                ContainerStatus::Creating => (egui::Color32::BLUE, "🔄"),
+                                ContainerStatus::Updating => (egui::Color32::BLUE, "⬆️"),
                             };
 
                             ui.label(status_icon);
@@ -1508,44 +1659,68 @@ impl GhostForgeApp {
                                 if let Some(wine_version) = &container.wine_version {
                                     ui.small(format!("Wine: {}", wine_version));
                                 }
-                                ui.small(format!("GPU: {}", if container.gpu_enabled { "Enabled" } else { "Disabled" }));
+                                ui.small(format!(
+                                    "GPU: {}",
+                                    if container.gpu_enabled {
+                                        "Enabled"
+                                    } else {
+                                        "Disabled"
+                                    }
+                                ));
                             });
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                match &container.status {
-                                    ContainerStatus::Running => {
-                                        if ui.small_button("⏹️").on_hover_text("Stop").clicked() {
-                                            let bolt_manager: Arc<BoltGameManager> = Arc::clone(&self.bolt_manager);
-                                            let container_id = container.id.clone();
-                                            let ctx = ui.ctx().clone();
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    match &container.status {
+                                        ContainerStatus::Running => {
+                                            if ui.small_button("⏹️").on_hover_text("Stop").clicked()
+                                            {
+                                                let bolt_manager: Arc<BoltGameManager> =
+                                                    Arc::clone(&self.bolt_manager);
+                                                let container_id = container.id.clone();
+                                                let ctx = ui.ctx().clone();
 
-                                            tokio::spawn(async move {
-                                                if let Err(e) = bolt_manager.stop_game(&container_id).await {
-                                                    eprintln!("Failed to stop container: {}", e);
-                                                }
-                                                ctx.request_repaint();
-                                            });
+                                                tokio::spawn(async move {
+                                                    if let Err(e) =
+                                                        bolt_manager.stop_game(&container_id).await
+                                                    {
+                                                        eprintln!(
+                                                            "Failed to stop container: {}",
+                                                            e
+                                                        );
+                                                    }
+                                                    ctx.request_repaint();
+                                                });
+                                            }
                                         }
-                                    }
-                                    ContainerStatus::Stopped => {
-                                        if ui.small_button("▶️").on_hover_text("Start").clicked() {
-                                            // TODO: Implement container restart
+                                        ContainerStatus::Stopped => {
+                                            if ui
+                                                .small_button("▶️")
+                                                .on_hover_text("Start")
+                                                .clicked()
+                                            {
+                                                // TODO: Implement container restart
+                                            }
                                         }
+                                        _ => {}
                                     }
-                                    _ => {}
-                                }
 
-                                if ui.small_button("📊").on_hover_text("Details").clicked() {
-                                    self.selected_game = Some(container.id.clone());
-                                    self.show_container_details = true;
-                                }
+                                    if ui.small_button("📊").on_hover_text("Details").clicked() {
+                                        self.selected_game = Some(container.id.clone());
+                                        self.show_container_details = true;
+                                    }
 
-                                if ui.small_button("📋").on_hover_text("Logs").clicked() {
-                                    // TODO: Show container logs
-                                }
+                                    if ui.small_button("📋").on_hover_text("Logs").clicked() {
+                                        // TODO: Show container logs
+                                    }
 
-                                ui.colored_label(status_color, format!("{:?}", container.status));
-                            });
+                                    ui.colored_label(
+                                        status_color,
+                                        format!("{:?}", container.status),
+                                    );
+                                },
+                            );
                         });
                     });
                 }
@@ -1555,7 +1730,8 @@ impl GhostForgeApp {
         // Container details popup
         if self.show_container_details {
             if let Some(selected_id) = &self.selected_game {
-                if let Some(container) = self.game_containers.iter().find(|c| &c.id == selected_id) {
+                if let Some(container) = self.game_containers.iter().find(|c| &c.id == selected_id)
+                {
                     egui::Window::new(format!("Container Details: {}", container.name))
                         .collapsible(false)
                         .resizable(true)
@@ -1563,10 +1739,16 @@ impl GhostForgeApp {
                             ui.label(format!("ID: {}", container.id));
                             ui.label(format!("Game: {}", container.game_id));
                             ui.label(format!("Image: {}", container.image));
-                            ui.label(format!("Created: {}", container.created.format("%Y-%m-%d %H:%M:%S")));
+                            ui.label(format!(
+                                "Created: {}",
+                                container.created.format("%Y-%m-%d %H:%M:%S")
+                            ));
                             ui.label(format!("Status: {:?}", container.status));
                             ui.label(format!("GPU Enabled: {}", container.gpu_enabled));
-                            ui.label(format!("Performance Profile: {}", container.performance_profile));
+                            ui.label(format!(
+                                "Performance Profile: {}",
+                                container.performance_profile
+                            ));
 
                             if !container.ports.is_empty() {
                                 ui.label("Ports:");
@@ -1598,7 +1780,10 @@ impl GhostForgeApp {
                     }
                 }
                 if ui.button("⚙️ Gaming Optimize").clicked() {
-                    if let Err(e) = self.display_manager.optimize_for_gaming(self.gaming_display_settings.target_fps) {
+                    if let Err(e) = self
+                        .display_manager
+                        .optimize_for_gaming(self.gaming_display_settings.target_fps)
+                    {
                         self.error_message = Some(format!("Failed to optimize displays: {}", e));
                     }
                 }
@@ -1636,7 +1821,8 @@ impl GhostForgeApp {
                         // Display info
                         ui.vertical(|ui| {
                             ui.strong(&display.name);
-                            ui.label(format!("{}x{} @ {}Hz",
+                            ui.label(format!(
+                                "{}x{} @ {}Hz",
                                 display.resolution.width,
                                 display.resolution.height,
                                 display.current_refresh_rate
@@ -1743,7 +1929,8 @@ impl GhostForgeApp {
                         // Frame time variance (jitter)
                         ui.horizontal(|ui| {
                             ui.label("Frame consistency:");
-                            let consistency = 100.0 - (metrics.frame_time_variance * 10.0).min(100.0);
+                            let consistency =
+                                100.0 - (metrics.frame_time_variance * 10.0).min(100.0);
                             let consistency_color = if consistency > 90.0 {
                                 egui::Color32::GREEN
                             } else if consistency > 70.0 {
@@ -1762,7 +1949,15 @@ impl GhostForgeApp {
                 ui.heading("🎮 Display Profiles");
 
                 ui.horizontal(|ui| {
-                    for (profile_name, profile) in self.display_manager.get_profiles() {
+                    // Collect profile names to avoid borrowing issues
+                    let profile_names: Vec<_> = self
+                        .display_manager
+                        .get_profiles()
+                        .iter()
+                        .map(|(name, profile)| (name.clone(), profile.clone()))
+                        .collect();
+
+                    for (profile_name, profile) in profile_names {
                         let profile_color = if profile.gaming_optimized {
                             egui::Color32::from_rgb(100, 200, 100)
                         } else {
@@ -1770,8 +1965,9 @@ impl GhostForgeApp {
                         };
 
                         if ui.colored_label(profile_color, &profile.name).clicked() {
-                            if let Err(e) = self.display_manager.apply_profile(profile_name) {
-                                self.error_message = Some(format!("Failed to apply profile: {}", e));
+                            if let Err(e) = self.display_manager.apply_profile(&profile_name) {
+                                self.error_message =
+                                    Some(format!("Failed to apply profile: {}", e));
                             }
                         }
                     }
@@ -1784,7 +1980,10 @@ impl GhostForgeApp {
 
                 ui.horizontal(|ui| {
                     ui.label("Target FPS:");
-                    ui.add(egui::Slider::new(&mut self.gaming_display_settings.target_fps, 30..=240));
+                    ui.add(egui::Slider::new(
+                        &mut self.gaming_display_settings.target_fps,
+                        30..=240,
+                    ));
                 });
 
                 ui.horizontal(|ui| {
@@ -1792,23 +1991,47 @@ impl GhostForgeApp {
                     egui::ComboBox::from_label("")
                         .selected_text(format!("{:?}", self.gaming_display_settings.vsync_mode))
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.gaming_display_settings.vsync_mode,
-                                crate::display::VsyncMode::Off, "Off");
-                            ui.selectable_value(&mut self.gaming_display_settings.vsync_mode,
-                                crate::display::VsyncMode::On, "On");
-                            ui.selectable_value(&mut self.gaming_display_settings.vsync_mode,
-                                crate::display::VsyncMode::Adaptive, "Adaptive");
-                            ui.selectable_value(&mut self.gaming_display_settings.vsync_mode,
-                                crate::display::VsyncMode::FastSync, "FastSync");
-                            ui.selectable_value(&mut self.gaming_display_settings.vsync_mode,
-                                crate::display::VsyncMode::Enhanced, "Enhanced");
+                            ui.selectable_value(
+                                &mut self.gaming_display_settings.vsync_mode,
+                                VsyncMode::Off,
+                                "Off",
+                            );
+                            ui.selectable_value(
+                                &mut self.gaming_display_settings.vsync_mode,
+                                VsyncMode::On,
+                                "On",
+                            );
+                            ui.selectable_value(
+                                &mut self.gaming_display_settings.vsync_mode,
+                                VsyncMode::Adaptive,
+                                "Adaptive",
+                            );
+                            ui.selectable_value(
+                                &mut self.gaming_display_settings.vsync_mode,
+                                VsyncMode::FastSync,
+                                "FastSync",
+                            );
+                            ui.selectable_value(
+                                &mut self.gaming_display_settings.vsync_mode,
+                                VsyncMode::Enhanced,
+                                "Enhanced",
+                            );
                         });
                 });
 
-                ui.checkbox(&mut self.gaming_display_settings.frame_pacing, "Frame Pacing");
-                ui.checkbox(&mut self.gaming_display_settings.low_latency_mode, "Low Latency Mode");
+                ui.checkbox(
+                    &mut self.gaming_display_settings.frame_pacing,
+                    "Frame Pacing",
+                );
+                ui.checkbox(
+                    &mut self.gaming_display_settings.low_latency_mode,
+                    "Low Latency Mode",
+                );
                 ui.checkbox(&mut self.gaming_display_settings.hdr_gaming, "HDR Gaming");
-                ui.checkbox(&mut self.gaming_display_settings.fullscreen_optimizations, "Fullscreen Optimizations");
+                ui.checkbox(
+                    &mut self.gaming_display_settings.fullscreen_optimizations,
+                    "Fullscreen Optimizations",
+                );
             });
         });
     }
@@ -1822,7 +2045,7 @@ pub fn run_gui() -> Result<()> {
             .with_min_inner_size([800.0, 600.0])
             .with_icon(
                 eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon.png")[..])
-                    .unwrap_or_default()
+                    .unwrap_or_default(),
             ),
         ..Default::default()
     };
@@ -1834,10 +2057,13 @@ pub fn run_gui() -> Result<()> {
             // Configure egui fonts and visuals
             Ok(Box::new(GhostForgeApp::default()))
         }),
-    ).map_err(|e| anyhow::anyhow!("Failed to run GUI: {}", e))
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to run GUI: {}", e))
 }
 
 #[cfg(not(feature = "gui"))]
 pub fn run_gui() -> anyhow::Result<()> {
-    Err(anyhow::anyhow!("GUI feature not enabled. Compile with --features gui"))
+    Err(anyhow::anyhow!(
+        "GUI feature not enabled. Compile with --features gui"
+    ))
 }

@@ -1,9 +1,9 @@
 use anyhow::Result;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use regex::Regex;
-use std::fs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Launcher {
@@ -99,12 +99,11 @@ impl LauncherManager {
 
         for path in possible_paths {
             if path.exists() {
-                let executable = path.join("steam.sh")
+                let executable = path
+                    .join("steam.sh")
                     .exists()
                     .then(|| path.join("steam.sh"))
-                    .or_else(|| {
-                        which::which("steam").ok()
-                    });
+                    .or_else(|| which::which("steam").ok());
 
                 if let Some(exec) = executable {
                     return Ok(Some(Launcher {
@@ -113,10 +112,7 @@ impl LauncherManager {
                         path: path.clone(),
                         executable: exec,
                         config_path: path.join("config"),
-                        games_path: vec![
-                            path.join("steamapps/common"),
-                            path.join("steamapps"),
-                        ],
+                        games_path: vec![path.join("steamapps/common"), path.join("steamapps")],
                         installed: true,
                         wine_prefix: None,
                         wine_version: None,
@@ -132,7 +128,9 @@ impl LauncherManager {
         let possible_prefixes = vec![
             dirs::home_dir().unwrap().join(".wine"),
             dirs::home_dir().unwrap().join("Games/battlenet"),
-            dirs::home_dir().unwrap().join(".local/share/lutris/runners/wine/battlenet"),
+            dirs::home_dir()
+                .unwrap()
+                .join(".local/share/lutris/runners/wine/battlenet"),
         ];
 
         for prefix in possible_prefixes {
@@ -165,7 +163,9 @@ impl LauncherManager {
         let possible_prefixes = vec![
             dirs::home_dir().unwrap().join(".wine"),
             dirs::home_dir().unwrap().join("Games/epic-games-store"),
-            dirs::home_dir().unwrap().join(".local/share/lutris/runners/wine/epic"),
+            dirs::home_dir()
+                .unwrap()
+                .join(".local/share/lutris/runners/wine/epic"),
         ];
 
         for prefix in possible_prefixes {
@@ -179,9 +179,7 @@ impl LauncherManager {
                         path: epic_path.clone(),
                         executable,
                         config_path: prefix.join("drive_c/ProgramData/Epic"),
-                        games_path: vec![
-                            prefix.join("drive_c/Program Files/Epic Games"),
-                        ],
+                        games_path: vec![prefix.join("drive_c/Program Files/Epic Games")],
                         installed: true,
                         wine_prefix: Some(prefix),
                         wine_version: None,
@@ -229,9 +227,7 @@ impl LauncherManager {
                         path: gog_path.clone(),
                         executable,
                         config_path: prefix.join("drive_c/ProgramData/GOG.com"),
-                        games_path: vec![
-                            prefix.join("drive_c/GOG Games"),
-                        ],
+                        games_path: vec![prefix.join("drive_c/GOG Games")],
                         installed: true,
                         wine_prefix: Some(prefix),
                         wine_version: None,
@@ -268,7 +264,8 @@ impl LauncherManager {
         ];
 
         for prefix in possible_prefixes {
-            let ubisoft_path = prefix.join("drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher");
+            let ubisoft_path =
+                prefix.join("drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher");
             if ubisoft_path.exists() {
                 let executable = ubisoft_path.join("UbisoftConnect.exe");
                 if executable.exists() {
@@ -278,9 +275,7 @@ impl LauncherManager {
                         path: ubisoft_path.clone(),
                         executable,
                         config_path: prefix.join("drive_c/Program Files (x86)/Ubisoft"),
-                        games_path: vec![
-                            prefix.join("drive_c/Program Files (x86)/Ubisoft"),
-                        ],
+                        games_path: vec![prefix.join("drive_c/Program Files (x86)/Ubisoft")],
                         installed: true,
                         wine_prefix: Some(prefix),
                         wine_version: None,
@@ -309,9 +304,7 @@ impl LauncherManager {
                         path: ea_path.clone(),
                         executable,
                         config_path: prefix.join("drive_c/ProgramData/Electronic Arts"),
-                        games_path: vec![
-                            prefix.join("drive_c/Program Files/EA Games"),
-                        ],
+                        games_path: vec![prefix.join("drive_c/Program Files/EA Games")],
                         installed: true,
                         wine_prefix: Some(prefix),
                         wine_version: None,
@@ -325,7 +318,9 @@ impl LauncherManager {
 
     pub fn sync_steam_games(&self, steam_launcher: &Launcher) -> Result<Vec<LauncherGame>> {
         let mut games = Vec::new();
-        let libraryfolders_vdf = steam_launcher.config_path.parent()
+        let libraryfolders_vdf = steam_launcher
+            .config_path
+            .parent()
             .unwrap()
             .join("steamapps/libraryfolders.vdf");
 
@@ -359,9 +354,7 @@ impl LauncherManager {
     }
 
     fn parse_steam_libraries(&self, content: &str) -> Result<Vec<PathBuf>> {
-        let mut paths = vec![
-            dirs::home_dir().unwrap().join(".local/share/Steam"),
-        ];
+        let mut paths = vec![dirs::home_dir().unwrap().join(".local/share/Steam")];
 
         // Simple regex to find path entries in libraryfolders.vdf
         let re = Regex::new(r#""path"\s+"([^"]+)""#)?;
@@ -450,11 +443,36 @@ impl LauncherManager {
 
             // Other Blizzard games
             let blizzard_games = vec![
-                ("Diablo IV", "drive_c/Program Files (x86)/Diablo IV", "Diablo IV.exe", "d4"),
-                ("Diablo III", "drive_c/Program Files (x86)/Diablo III", "Diablo III.exe", "d3"),
-                ("Overwatch", "drive_c/Program Files (x86)/Overwatch", "Overwatch.exe", "pro"),
-                ("Hearthstone", "drive_c/Program Files (x86)/Hearthstone", "Hearthstone.exe", "hs"),
-                ("StarCraft II", "drive_c/Program Files (x86)/StarCraft II", "StarCraft II.exe", "s2"),
+                (
+                    "Diablo IV",
+                    "drive_c/Program Files (x86)/Diablo IV",
+                    "Diablo IV.exe",
+                    "d4",
+                ),
+                (
+                    "Diablo III",
+                    "drive_c/Program Files (x86)/Diablo III",
+                    "Diablo III.exe",
+                    "d3",
+                ),
+                (
+                    "Overwatch",
+                    "drive_c/Program Files (x86)/Overwatch",
+                    "Overwatch.exe",
+                    "pro",
+                ),
+                (
+                    "Hearthstone",
+                    "drive_c/Program Files (x86)/Hearthstone",
+                    "Hearthstone.exe",
+                    "hs",
+                ),
+                (
+                    "StarCraft II",
+                    "drive_c/Program Files (x86)/StarCraft II",
+                    "StarCraft II.exe",
+                    "s2",
+                ),
             ];
 
             for (name, path, exe, code) in blizzard_games {
@@ -482,12 +500,13 @@ impl LauncherManager {
         match game.launcher {
             LauncherType::Steam => {
                 // Use Steam URL protocol
-                Command::new("xdg-open")
-                    .arg(&game.launch_command)
-                    .spawn()?;
+                Command::new("xdg-open").arg(&game.launch_command).spawn()?;
             }
-            LauncherType::BattleNet | LauncherType::Epic | LauncherType::GOG |
-            LauncherType::Ubisoft | LauncherType::EA => {
+            LauncherType::BattleNet
+            | LauncherType::Epic
+            | LauncherType::GOG
+            | LauncherType::Ubisoft
+            | LauncherType::EA => {
                 // Launch through Wine
                 if let Some(wine) = wine_cmd {
                     if let Some(exe) = &game.executable {
@@ -497,7 +516,9 @@ impl LauncherManager {
                             .spawn()?;
                     }
                 } else {
-                    return Err(anyhow::anyhow!("Wine command not specified for Windows game"));
+                    return Err(anyhow::anyhow!(
+                        "Wine command not specified for Windows game"
+                    ));
                 }
             }
             _ => {
@@ -508,24 +529,29 @@ impl LauncherManager {
         Ok(())
     }
 
-    pub fn setup_launcher(&self, launcher_type: LauncherType, _path: Option<PathBuf>) -> Result<Launcher> {
+    pub async fn setup_launcher(
+        &self,
+        launcher_type: LauncherType,
+        _path: Option<PathBuf>,
+    ) -> Result<Launcher> {
         // Implementation for manually setting up a launcher
         match launcher_type {
             LauncherType::Steam => {
                 if let Some(steam) = self.detect_steam()? {
                     return Ok(steam);
                 }
-                Err(anyhow::anyhow!("Steam not found. Please install Steam first."))
+                Err(anyhow::anyhow!(
+                    "Steam not found. Please install Steam first."
+                ))
             }
             LauncherType::BattleNet => {
                 // Download and install Battle.net installer
-                println!("Battle.net setup requires Wine. Please ensure Wine is installed.");
-                // TODO: Implement Battle.net installer download and setup
-                Err(anyhow::anyhow!("Battle.net auto-setup not yet implemented"))
+                self.setup_battlenet_launcher().await
             }
-            _ => {
-                Err(anyhow::anyhow!("Launcher setup not yet implemented for {:?}", launcher_type))
-            }
+            _ => Err(anyhow::anyhow!(
+                "Launcher setup not yet implemented for {:?}",
+                launcher_type
+            )),
         }
     }
 
@@ -545,7 +571,11 @@ impl LauncherManager {
     }
 
     /// Import games from a specific launcher
-    pub async fn import_launcher_games(&self, launcher: &Launcher, game_lib: &crate::game::GameLibrary) -> Result<u32> {
+    pub async fn import_launcher_games(
+        &self,
+        launcher: &Launcher,
+        game_lib: &crate::game::GameLibrary,
+    ) -> Result<u32> {
         let games = match launcher.launcher_type {
             LauncherType::Steam => self.import_steam_games(launcher, game_lib).await?,
             LauncherType::BattleNet => self.import_battlenet_games(launcher, game_lib).await?,
@@ -557,7 +587,11 @@ impl LauncherManager {
         Ok(games)
     }
 
-    async fn import_steam_games(&self, launcher: &Launcher, game_lib: &crate::game::GameLibrary) -> Result<u32> {
+    async fn import_steam_games(
+        &self,
+        launcher: &Launcher,
+        game_lib: &crate::game::GameLibrary,
+    ) -> Result<u32> {
         let steam_games = self.sync_steam_games(launcher)?;
         let mut imported_count = 0;
 
@@ -607,7 +641,11 @@ impl LauncherManager {
         Ok(imported_count)
     }
 
-    async fn import_battlenet_games(&self, launcher: &Launcher, game_lib: &crate::game::GameLibrary) -> Result<u32> {
+    async fn import_battlenet_games(
+        &self,
+        launcher: &Launcher,
+        game_lib: &crate::game::GameLibrary,
+    ) -> Result<u32> {
         let battlenet_games = self.sync_battlenet_games(launcher)?;
         let mut imported_count = 0;
 
@@ -629,7 +667,10 @@ impl LauncherManager {
                 launch_arguments: vec![],
                 environment_variables: vec![
                     ("DXVK_ASYNC".to_string(), "1".to_string()),
-                    ("WINEDLLOVERRIDES".to_string(), "winemenubuilder.exe=d".to_string()),
+                    (
+                        "WINEDLLOVERRIDES".to_string(),
+                        "winemenubuilder.exe=d".to_string(),
+                    ),
                 ],
                 pre_launch_script: None,
                 post_launch_script: None,
@@ -642,7 +683,11 @@ impl LauncherManager {
                 hidden: false,
                 notes: Some(format!(
                     "Imported from Battle.net. Prefix: {}",
-                    launcher.wine_prefix.as_ref().unwrap_or(&std::path::PathBuf::from("unknown")).display()
+                    launcher
+                        .wine_prefix
+                        .as_ref()
+                        .unwrap_or(&std::path::PathBuf::from("unknown"))
+                        .display()
                 )),
             };
 
@@ -655,13 +700,21 @@ impl LauncherManager {
         Ok(imported_count)
     }
 
-    async fn import_epic_games(&self, _launcher: &Launcher, _game_lib: &crate::game::GameLibrary) -> Result<u32> {
+    async fn import_epic_games(
+        &self,
+        _launcher: &Launcher,
+        _game_lib: &crate::game::GameLibrary,
+    ) -> Result<u32> {
         // TODO: Implement Epic Games import
         println!("Epic Games import not yet implemented");
         Ok(0)
     }
 
-    async fn import_gog_games(&self, _launcher: &Launcher, _game_lib: &crate::game::GameLibrary) -> Result<u32> {
+    async fn import_gog_games(
+        &self,
+        _launcher: &Launcher,
+        _game_lib: &crate::game::GameLibrary,
+    ) -> Result<u32> {
         // TODO: Implement GOG Galaxy import
         println!("GOG Galaxy import not yet implemented");
         Ok(0)
@@ -675,8 +728,13 @@ impl LauncherManager {
 
         // Common executable names
         let common_names = [
-            "game.exe", "main.exe", "launcher.exe", "start.exe",
-            "play.exe", "run.exe", "client.exe"
+            "game.exe",
+            "main.exe",
+            "launcher.exe",
+            "start.exe",
+            "play.exe",
+            "run.exe",
+            "client.exe",
         ];
 
         // Check for common names first
@@ -695,7 +753,10 @@ impl LauncherManager {
                     if path.extension().and_then(|s| s.to_str()) == Some("exe") {
                         // Prefer non-uninstaller executables
                         let name = path.file_name().unwrap().to_str().unwrap().to_lowercase();
-                        if !name.contains("unins") && !name.contains("setup") && !name.contains("install") {
+                        if !name.contains("unins")
+                            && !name.contains("setup")
+                            && !name.contains("install")
+                        {
                             return Some(path);
                         }
                     }
@@ -717,15 +778,236 @@ impl LauncherManager {
             Ok(Some(_summary)) => {
                 protondb.cache_game_data(steam_appid, &cache_dir).await?;
                 println!("  📊 Cached ProtonDB data for {}", game_name);
-            },
+            }
             Ok(None) => {
                 println!("  ⚠️ No ProtonDB data found for {}", game_name);
-            },
+            }
             Err(e) => {
-                println!("  ⚠️ Failed to fetch ProtonDB data for {}: {}", game_name, e);
+                println!(
+                    "  ⚠️ Failed to fetch ProtonDB data for {}: {}",
+                    game_name, e
+                );
             }
         }
 
+        Ok(())
+    }
+
+    /// Setup Battle.net launcher with Wine integration for WoW, Diablo 4, etc.
+    async fn setup_battlenet_launcher(&self) -> Result<Launcher> {
+        println!("🎮 Setting up Battle.net launcher for WoW/Diablo 4...");
+
+        // Check if Wine is installed
+        if which::which("wine").is_err() {
+            return Err(anyhow::anyhow!(
+                "Wine is required for Battle.net. Please install Wine first."
+            ));
+        }
+
+        // Create Battle.net Wine prefix
+        let battlenet_prefix = dirs::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?
+            .join(".wine-battlenet");
+
+        if !battlenet_prefix.exists() {
+            println!("📁 Creating Battle.net Wine prefix...");
+            std::fs::create_dir_all(&battlenet_prefix)?;
+
+            // Initialize Wine prefix
+            let status = std::process::Command::new("env")
+                .env("WINEPREFIX", &battlenet_prefix)
+                .arg("wineboot")
+                .arg("--init")
+                .status()?;
+
+            if !status.success() {
+                return Err(anyhow::anyhow!(
+                    "Failed to initialize Wine prefix for Battle.net"
+                ));
+            }
+        }
+
+        // Download Battle.net installer
+        let installer_path = self.download_battlenet_installer().await?;
+
+        // Install Battle.net
+        println!("🔧 Installing Battle.net...");
+        let install_status = std::process::Command::new("env")
+            .env("WINEPREFIX", &battlenet_prefix)
+            .arg("wine")
+            .arg(&installer_path)
+            .arg("/S") // Silent install
+            .status()?;
+
+        if !install_status.success() {
+            return Err(anyhow::anyhow!("Failed to install Battle.net"));
+        }
+
+        // Apply Battle.net Wine optimizations
+        self.apply_battlenet_wine_optimizations(&battlenet_prefix)?;
+
+        // Find Battle.net executable
+        let battlenet_exe =
+            battlenet_prefix.join("drive_c/Program Files (x86)/Battle.net/Battle.net Launcher.exe");
+
+        if !battlenet_exe.exists() {
+            return Err(anyhow::anyhow!(
+                "Battle.net installation failed - executable not found"
+            ));
+        }
+
+        println!("✅ Battle.net setup completed successfully!");
+
+        Ok(Launcher {
+            name: "Battle.net".to_string(),
+            launcher_type: LauncherType::BattleNet,
+            path: battlenet_prefix.clone(),
+            executable: battlenet_exe,
+            config_path: battlenet_prefix
+                .join("drive_c/users/")
+                .join(std::env::var("USER").unwrap_or_default())
+                .join("AppData/Roaming/Battle.net"),
+            games_path: vec![battlenet_prefix.join("drive_c/Program Files (x86)/Battle.net/Games")],
+            installed: true,
+            wine_prefix: Some(battlenet_prefix),
+            wine_version: Some("Latest".to_string()),
+        })
+    }
+
+    /// Download the latest Battle.net installer
+    async fn download_battlenet_installer(&self) -> Result<std::path::PathBuf> {
+        let installer_url = "https://www.battle.net/download/getInstallerForGame?os=win&locale=enUS&version=LIVE&gameProgram=BATTLENET_APP";
+        let installer_path = dirs::cache_dir()
+            .unwrap_or_default()
+            .join("ghostforge")
+            .join("Battle.net-Setup.exe");
+
+        // Create cache directory
+        if let Some(parent) = installer_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        // Download installer if not already cached
+        if !installer_path.exists() {
+            println!("⬇️ Downloading Battle.net installer...");
+
+            let client = reqwest::Client::new();
+            let response = client
+                .get(installer_url)
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                )
+                .send()
+                .await?;
+
+            if !response.status().is_success() {
+                return Err(anyhow::anyhow!(
+                    "Failed to download Battle.net installer: {}",
+                    response.status()
+                ));
+            }
+
+            let bytes = response.bytes().await?;
+            std::fs::write(&installer_path, bytes)?;
+            println!("✅ Battle.net installer downloaded");
+        }
+
+        Ok(installer_path)
+    }
+
+    /// Apply Wine optimizations specifically for Battle.net and Blizzard games
+    fn apply_battlenet_wine_optimizations(&self, prefix_path: &std::path::Path) -> Result<()> {
+        println!("⚡ Applying Battle.net Wine optimizations...");
+
+        let env_cmd = |args: &[&str]| -> Result<()> {
+            let status = std::process::Command::new("env")
+                .env("WINEPREFIX", prefix_path)
+                .args(args)
+                .status()?;
+            if !status.success() {
+                println!("⚠️ Wine optimization command failed: {:?}", args);
+            }
+            Ok(())
+        };
+
+        // Set Windows version to Windows 10 for better compatibility
+        env_cmd(&["winecfg", "/v", "win10"])?;
+
+        // Configure DLL overrides for better Battle.net performance
+        env_cmd(&[
+            "wine",
+            "reg",
+            "add",
+            "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides",
+            "/v",
+            "msvcp140",
+            "/d",
+            "native,builtin",
+            "/f",
+        ])?;
+        env_cmd(&[
+            "wine",
+            "reg",
+            "add",
+            "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides",
+            "/v",
+            "vcruntime140",
+            "/d",
+            "native,builtin",
+            "/f",
+        ])?;
+
+        // Optimize for gaming performance
+        env_cmd(&[
+            "wine",
+            "reg",
+            "add",
+            "HKEY_CURRENT_USER\\Software\\Wine\\Direct3D",
+            "/v",
+            "MaxVersionGL",
+            "/d",
+            "0x40006",
+            "/f",
+        ])?;
+
+        // Set audio driver (helps with Diablo 4 audio issues)
+        env_cmd(&[
+            "wine",
+            "reg",
+            "add",
+            "HKEY_CURRENT_USER\\Software\\Wine\\Drivers",
+            "/v",
+            "Audio",
+            "/d",
+            "pulse",
+            "/f",
+        ])?;
+
+        // Install critical Windows components via winetricks if available
+        if which::which("winetricks").is_ok() {
+            let winetricks_cmd = std::process::Command::new("env")
+                .env("WINEPREFIX", prefix_path)
+                .arg("winetricks")
+                .arg("-q") // Quiet mode
+                .args(&["vcrun2019", "corefonts", "d3dx9", "dxvk"])
+                .status();
+
+            match winetricks_cmd {
+                Ok(status) => {
+                    if status.success() {
+                        println!("✅ Winetricks optimizations applied");
+                    } else {
+                        println!("⚠️ Some winetricks optimizations failed (this is often fine)");
+                    }
+                }
+                Err(e) => {
+                    println!("⚠️ Could not run winetricks: {} (this is often fine)", e);
+                }
+            }
+        }
+
+        println!("✅ Battle.net Wine optimizations completed");
         Ok(())
     }
 }

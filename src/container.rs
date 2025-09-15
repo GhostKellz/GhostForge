@@ -1,11 +1,11 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 use tokio::process::Command as AsyncCommand;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameContainer {
@@ -43,17 +43,17 @@ pub struct MountPoint {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BindType {
-    Bind,        // Direct bind mount
-    Volume,      // Named volume
-    TmpFs,       // Temporary filesystem
-    DeviceNode,  // Device access
+    Bind,       // Direct bind mount
+    Volume,     // Named volume
+    TmpFs,      // Temporary filesystem
+    DeviceNode, // Device access
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NetworkMode {
-    Bridge,      // Default bridge network
-    Host,        // Host networking (for anti-cheat)
-    None,        // No network access
+    Bridge,         // Default bridge network
+    Host,           // Host networking (for anti-cheat)
+    None,           // No network access
     Custom(String), // Custom network name
 }
 
@@ -226,7 +226,8 @@ impl ContainerManager {
         }
 
         // Store container configuration
-        self.containers.insert(container.id.clone(), container.clone());
+        self.containers
+            .insert(container.id.clone(), container.clone());
         self.save_container_config(&container)?;
 
         Ok(container)
@@ -239,20 +240,23 @@ impl ContainerManager {
         // - Performance requirements
 
         if game.launcher.as_deref() == Some("steam") {
-            return Ok(self.base_images.iter()
+            return Ok(self
+                .base_images
+                .iter()
                 .find(|img| img.name.contains("steam"))
                 .unwrap_or(&self.base_images[0])
                 .clone());
         }
 
         // Check for NVIDIA requirements
-        let graphics_manager = crate::graphics::GraphicsManager::new(
-            std::env::temp_dir().join("graphics_temp")
-        )?;
+        let graphics_manager =
+            crate::graphics::GraphicsManager::new(std::env::temp_dir().join("graphics_temp"))?;
 
         if let Ok(nvidia_features) = graphics_manager.detect_nvidia_features() {
             if nvidia_features.available {
-                return Ok(self.base_images.iter()
+                return Ok(self
+                    .base_images
+                    .iter()
                     .find(|img| img.name.contains("nvidia"))
                     .unwrap_or(&self.base_images[0])
                     .clone());
@@ -280,21 +284,27 @@ impl ContainerManager {
     }
 
     async fn configure_graphics_layers(&self, game: &crate::game::Game) -> Result<Vec<String>> {
-        let graphics_manager = crate::graphics::GraphicsManager::new(
-            std::env::temp_dir().join("graphics_temp")
-        )?;
+        let graphics_manager =
+            crate::graphics::GraphicsManager::new(std::env::temp_dir().join("graphics_temp"))?;
 
-        let nvidia_features = graphics_manager.detect_nvidia_features().unwrap_or_default();
+        let nvidia_features = graphics_manager
+            .detect_nvidia_features()
+            .unwrap_or_default();
         let recommendations = graphics_manager.recommend_for_game(&game.name, &nvidia_features);
 
-        let layer_names = recommendations.iter()
+        let layer_names = recommendations
+            .iter()
             .map(|layer| format!("{:?}", layer))
             .collect();
 
         Ok(layer_names)
     }
 
-    fn create_mount_points(&self, game: &crate::game::Game, container_id: &str) -> Result<Vec<MountPoint>> {
+    fn create_mount_points(
+        &self,
+        game: &crate::game::Game,
+        container_id: &str,
+    ) -> Result<Vec<MountPoint>> {
         let mut mounts = vec![
             // Game files
             MountPoint {
@@ -356,23 +366,36 @@ impl ContainerManager {
     fn setup_wine_environment(&self, env: &mut HashMap<String, String>, wine_version: &str) {
         env.insert("WINE_VERSION".to_string(), wine_version.to_string());
         env.insert("WINEPREFIX".to_string(), "/wine_prefix".to_string());
-        env.insert("WINEDLLOVERRIDES".to_string(), "mscoree,mshtml=".to_string());
+        env.insert(
+            "WINEDLLOVERRIDES".to_string(),
+            "mscoree,mshtml=".to_string(),
+        );
         env.insert("WINE_LARGE_ADDRESS_AWARE".to_string(), "1".to_string());
     }
 
-    fn setup_graphics_environment(&self, env: &mut HashMap<String, String>, graphics_layers: &[String]) {
+    fn setup_graphics_environment(
+        &self,
+        env: &mut HashMap<String, String>,
+        graphics_layers: &[String],
+    ) {
         for layer in graphics_layers {
             match layer.as_str() {
                 "DXVK" => {
                     env.insert("DXVK_ENABLE_NVAPI".to_string(), "1".to_string());
-                    env.insert("DXVK_CONFIG".to_string(), "dxr,dxgi.nvapiHack=False".to_string());
+                    env.insert(
+                        "DXVK_CONFIG".to_string(),
+                        "dxr,dxgi.nvapiHack=False".to_string(),
+                    );
                 }
                 "VKD3DProton" => {
                     env.insert("VKD3D_CONFIG".to_string(), "dxr".to_string());
                 }
                 "NvidiaDlss" => {
                     env.insert("DXVK_ENABLE_NVAPI".to_string(), "1".to_string());
-                    env.insert("DXVK_NVAPI_ALLOW_OTHER_DRIVERS".to_string(), "0".to_string());
+                    env.insert(
+                        "DXVK_NVAPI_ALLOW_OTHER_DRIVERS".to_string(),
+                        "0".to_string(),
+                    );
                 }
                 "MangoHud" => {
                     env.insert("MANGOHUD".to_string(), "1".to_string());
@@ -393,7 +416,10 @@ impl ContainerManager {
             env.insert("DISPLAY".to_string(), display);
         }
 
-        env.insert("PULSE_RUNTIME_PATH".to_string(), "/run/user/1000/pulse".to_string());
+        env.insert(
+            "PULSE_RUNTIME_PATH".to_string(),
+            "/run/user/1000/pulse".to_string(),
+        );
         env.insert("XDG_RUNTIME_DIR".to_string(), "/run/user/1000".to_string());
     }
 
@@ -407,11 +433,11 @@ impl ContainerManager {
         if game_lower.contains("cyberpunk") || game_lower.contains("metro") {
             // AAA games need more resources
             limits.memory_mb = Some(8192); // 8GB
-            limits.disk_mb = Some(20480);  // 20GB
+            limits.disk_mb = Some(20480); // 20GB
         } else if game_lower.contains("indie") || game_lower.contains("retro") {
             // Indie games need less
-            limits.memory_mb = Some(2048);  // 2GB
-            limits.disk_mb = Some(5120);   // 5GB
+            limits.memory_mb = Some(2048); // 2GB
+            limits.disk_mb = Some(5120); // 5GB
         }
 
         limits
@@ -442,10 +468,11 @@ impl ContainerManager {
         // Use host networking for games that need anti-cheat or low latency
         let game_lower = game.name.to_lowercase();
 
-        if game_lower.contains("valorant") ||
-           game_lower.contains("apex") ||
-           game_lower.contains("fortnite") ||
-           game_lower.contains("call of duty") {
+        if game_lower.contains("valorant")
+            || game_lower.contains("apex")
+            || game_lower.contains("fortnite")
+            || game_lower.contains("call of duty")
+        {
             return NetworkMode::Host;
         }
 
@@ -457,10 +484,7 @@ impl ContainerManager {
         let build_context = self.runtime.data_dir.join(&container.id);
 
         std::fs::create_dir_all(&build_context)?;
-        std::fs::write(
-            build_context.join("Dockerfile"),
-            dockerfile_content
-        )?;
+        std::fs::write(build_context.join("Dockerfile"), dockerfile_content)?;
 
         // Build the container image
         let build_cmd = match self.runtime.runtime_type {
@@ -472,8 +496,9 @@ impl ContainerManager {
         let output = AsyncCommand::new(build_cmd)
             .args(&[
                 "build",
-                "-t", &format!("ghostforge-{}", container.id),
-                build_context.to_str().unwrap()
+                "-t",
+                &format!("ghostforge-{}", container.id),
+                build_context.to_str().unwrap(),
             ])
             .output()
             .await?;
@@ -522,9 +547,18 @@ impl ContainerManager {
     #[cfg(feature = "container-bolt")]
     async fn build_bolt_container(&self, container: &GameContainer) -> Result<()> {
         // Placeholder implementation for when Bolt becomes available
-        println!("🔥 Building Bolt gaming container for {}...", container.name);
-        println!("   📦 Gaming capsule: {}", self.determine_gaming_capsule(container));
-        println!("   🎮 GPU support: {}", container.resource_limits.gpu_access);
+        println!(
+            "🔥 Building Bolt gaming container for {}...",
+            container.name
+        );
+        println!(
+            "   📦 Gaming capsule: {}",
+            self.determine_gaming_capsule(container)
+        );
+        println!(
+            "   🎮 GPU support: {}",
+            container.resource_limits.gpu_access
+        );
 
         if let Some(memory_mb) = container.resource_limits.memory_mb {
             println!("   💾 Memory limit: {}Mi", memory_mb);
@@ -534,20 +568,28 @@ impl ContainerManager {
         }
 
         println!("   📁 Volumes: {} mounts", container.mount_points.len());
-        println!("   🌍 Environment: {} variables", container.environment_variables.len());
+        println!(
+            "   🌍 Environment: {} variables",
+            container.environment_variables.len()
+        );
 
         // TODO: Replace with actual Bolt runtime calls when available
         // let bolt_runtime = BoltRuntime::new().await?;
         // bolt_runtime.create_service(&container.id, service_config).await?;
 
-        println!("✅ Bolt gaming container created (placeholder): {}", container.name);
+        println!(
+            "✅ Bolt gaming container created (placeholder): {}",
+            container.name
+        );
         println!("   ⚠️  Install Bolt runtime for actual functionality");
         Ok(())
     }
 
     #[cfg(not(feature = "container-bolt"))]
     async fn build_bolt_container(&self, _container: &GameContainer) -> Result<()> {
-        Err(anyhow::anyhow!("Bolt runtime feature not enabled. Compile with --features container-bolt"))
+        Err(anyhow::anyhow!(
+            "Bolt runtime feature not enabled. Compile with --features container-bolt"
+        ))
     }
 
     fn determine_gaming_capsule(&self, container: &GameContainer) -> String {
@@ -564,23 +606,27 @@ impl ContainerManager {
     }
 
     pub async fn launch_game(&self, container_id: &str, game: &crate::game::Game) -> Result<u32> {
-        let container = self.containers.get(container_id)
+        let container = self
+            .containers
+            .get(container_id)
             .ok_or_else(|| anyhow::anyhow!("Container not found: {}", container_id))?;
 
         match self.runtime.runtime_type {
             RuntimeType::Bolt => self.launch_bolt_game(container, game).await,
             _ => {
                 let run_cmd = self.build_run_command(container, game)?;
-                let child = AsyncCommand::new(&run_cmd[0])
-                    .args(&run_cmd[1..])
-                    .spawn()?;
+                let child = AsyncCommand::new(&run_cmd[0]).args(&run_cmd[1..]).spawn()?;
                 Ok(child.id().unwrap_or(0))
             }
         }
     }
 
     #[cfg(feature = "container-bolt")]
-    async fn launch_bolt_game(&self, container: &GameContainer, game: &crate::game::Game) -> Result<u32> {
+    async fn launch_bolt_game(
+        &self,
+        container: &GameContainer,
+        game: &crate::game::Game,
+    ) -> Result<u32> {
         println!("🎮 Launching {} with Bolt runtime...", game.name);
 
         // Create launch command for the game
@@ -598,23 +644,36 @@ impl ContainerManager {
 
         // Placeholder: return a fake PID for testing
         let fake_pid = 12345;
-        println!("🚀 {} launched with Bolt (placeholder PID: {})", game.name, fake_pid);
+        println!(
+            "🚀 {} launched with Bolt (placeholder PID: {})",
+            game.name, fake_pid
+        );
         println!("   ⚠️  Install Bolt runtime for actual game launching");
         Ok(fake_pid)
     }
 
     #[cfg(not(feature = "container-bolt"))]
-    async fn launch_bolt_game(&self, _container: &GameContainer, _game: &crate::game::Game) -> Result<u32> {
+    async fn launch_bolt_game(
+        &self,
+        _container: &GameContainer,
+        _game: &crate::game::Game,
+    ) -> Result<u32> {
         Err(anyhow::anyhow!("Bolt runtime feature not enabled"))
     }
 
-    fn build_run_command(&self, container: &GameContainer, game: &crate::game::Game) -> Result<Vec<String>> {
+    fn build_run_command(
+        &self,
+        container: &GameContainer,
+        game: &crate::game::Game,
+    ) -> Result<Vec<String>> {
         let mut cmd = vec![];
 
         match self.runtime.runtime_type {
             RuntimeType::Podman => cmd.push("podman".to_string()),
             RuntimeType::Docker => cmd.push("docker".to_string()),
-            RuntimeType::Bolt => return Err(anyhow::anyhow!("Use launch_bolt_game for Bolt runtime")),
+            RuntimeType::Bolt => {
+                return Err(anyhow::anyhow!("Use launch_bolt_game for Bolt runtime"));
+            }
             _ => return Err(anyhow::anyhow!("Unsupported runtime")),
         };
 
@@ -671,10 +730,13 @@ impl ContainerManager {
 
         // Game executable command
         cmd.push("wine".to_string());
-        cmd.push(game.executable.file_name()
-            .ok_or_else(|| anyhow::anyhow!("Invalid executable path"))?
-            .to_string_lossy()
-            .to_string());
+        cmd.push(
+            game.executable
+                .file_name()
+                .ok_or_else(|| anyhow::anyhow!("Invalid executable path"))?
+                .to_string_lossy()
+                .to_string(),
+        );
 
         // Add launch arguments
         for arg in &game.launch_arguments {
@@ -714,9 +776,13 @@ impl ContainerManager {
         let cutoff = Utc::now() - chrono::Duration::days(days_threshold as i64);
         let mut cleaned_count = 0;
 
-        let containers_to_remove: Vec<String> = self.containers.iter()
+        let containers_to_remove: Vec<String> = self
+            .containers
+            .iter()
             .filter(|(_, container)| {
-                container.last_used.map_or(true, |last_used| last_used < cutoff)
+                container
+                    .last_used
+                    .map_or(true, |last_used| last_used < cutoff)
             })
             .map(|(id, _)| id.clone())
             .collect();
@@ -831,20 +897,27 @@ impl ContainerManager {
                 #[cfg(feature = "container-bolt")]
                 {
                     if let Ok(output) = Command::new("bolt").arg("--version").output() {
-                        diagnostics.version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        diagnostics.version =
+                            String::from_utf8_lossy(&output.stdout).trim().to_string();
                         diagnostics.features.push("Gaming optimization".to_string());
                         diagnostics.features.push("GPU passthrough".to_string());
                         diagnostics.features.push("Snapshot system".to_string());
                         diagnostics.features.push("QUIC networking".to_string());
                     } else {
                         diagnostics.issues.push("Bolt binary not found".to_string());
-                        diagnostics.suggestions.push("Install Bolt from https://bolt.dev/".to_string());
+                        diagnostics
+                            .suggestions
+                            .push("Install Bolt from https://bolt.dev/".to_string());
                     }
                 }
                 #[cfg(not(feature = "container-bolt"))]
                 {
-                    diagnostics.issues.push("Bolt feature not compiled".to_string());
-                    diagnostics.suggestions.push("Recompile with --features container-bolt".to_string());
+                    diagnostics
+                        .issues
+                        .push("Bolt feature not compiled".to_string());
+                    diagnostics
+                        .suggestions
+                        .push("Recompile with --features container-bolt".to_string());
                 }
             }
             RuntimeType::Podman => {
@@ -862,7 +935,8 @@ impl ContainerManager {
             }
             RuntimeType::Docker => {
                 if let Ok(output) = Command::new("docker").arg("--version").output() {
-                    diagnostics.version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    diagnostics.version =
+                        String::from_utf8_lossy(&output.stdout).trim().to_string();
                     diagnostics.features.push("Wide compatibility".to_string());
                     diagnostics.features.push("Extensive ecosystem".to_string());
                 } else {
@@ -870,7 +944,9 @@ impl ContainerManager {
                 }
             }
             _ => {
-                diagnostics.issues.push("Unsupported runtime type".to_string());
+                diagnostics
+                    .issues
+                    .push("Unsupported runtime type".to_string());
             }
         }
 

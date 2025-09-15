@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  ghostforge-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: ghostforge-dev
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $HOME/.Xauthority:/root/.Xauthority:ro
+    environment:
+      - DISPLAY=$DISPLAY
+      - RUST_LOG=debug
+    working_dir: /app
+    command: cargo run -- --help
+    networks:
+      - ghostforge
+
+  ghostforge-gui:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: ghostforge-gui
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $HOME/.Xauthority:/root/.Xauthority:ro
+    environment:
+      - DISPLAY=$DISPLAY
+      - RUST_LOG=info
+    working_dir: /app
+    command: cargo run -- gui
+    networks:
+      - ghostforge
+    depends_on:
+      - ghostforge-dev
+
+  # Mock services for testing
+  bolt-runtime:
+    image: alpine:latest
+    container_name: bolt-runtime-mock
+    command: sleep infinity
+    networks:
+      - ghostforge
+
+networks:
+  ghostforge:
+    driver: bridge

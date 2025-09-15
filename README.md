@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img src="assets/logo/GhostForge-icon.png" alt="GhostForge Logo" width="128" height="128">
+
 **🎮 Next-Generation Gaming Platform Manager**
 *A modern Lutris alternative with Bolt container runtime, real-time monitoring, and advanced gaming optimizations*
 

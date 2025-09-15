@@ -3,11 +3,14 @@
 //! This module provides comprehensive display management for gaming on Linux,
 //! including Wayland support, G-Sync/FreeSync VRR, and performance optimization.
 
-use serde::{Serialize, Deserialize};
+use anyhow::{Result, anyhow};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
-use anyhow::{Result, anyhow};
+
+#[cfg(feature = "display-management")]
+use drm::connector;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayManager {
@@ -100,7 +103,7 @@ pub struct GamingDisplaySettings {
     pub fullscreen_optimizations: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum VsyncMode {
     Off,
     On,
@@ -111,8 +114,10 @@ pub enum VsyncMode {
 
 impl DisplayManager {
     pub fn new() -> Result<Self> {
-        let wayland_session = std::env::var("WAYLAND_DISPLAY").is_ok() ||
-                             std::env::var("XDG_SESSION_TYPE").map(|s| s == "wayland").unwrap_or(false);
+        let wayland_session = std::env::var("WAYLAND_DISPLAY").is_ok()
+            || std::env::var("XDG_SESSION_TYPE")
+                .map(|s| s == "wayland")
+                .unwrap_or(false);
 
         let mut manager = Self {
             displays: Vec::new(),
@@ -141,7 +146,7 @@ impl DisplayManager {
 
     #[cfg(feature = "wayland-gaming")]
     fn detect_wayland_displays(&mut self) -> Result<()> {
-        use wayland_client::{Connection, Dispatch, QueueHandle, EventQueue};
+        use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle};
         use wayland_protocols::xdg::shell::client::xdg_wm_base;
 
         // Connect to Wayland compositor
@@ -189,7 +194,10 @@ impl DisplayManager {
                 id: "eDP-1".to_string(),
                 name: "Built-in Display".to_string(),
                 connector: "eDP".to_string(),
-                resolution: Resolution { width: 1920, height: 1080 },
+                resolution: Resolution {
+                    width: 1920,
+                    height: 1080,
+                },
                 refresh_rates: vec![60, 120, 144],
                 current_refresh_rate: 60,
                 vrr_capable: true,
@@ -212,15 +220,11 @@ impl DisplayManager {
 
     #[cfg(feature = "display-management")]
     fn detect_drm_displays(&mut self) -> Result<()> {
-        use drm::control::{Device as ControlDevice, connector, crtc, Mode};
+        use drm::control::{Device as ControlDevice, Mode, connector, crtc};
         use std::fs::OpenOptions;
 
         // Open DRM device
-        let paths = [
-            "/dev/dri/card0",
-            "/dev/dri/card1",
-            "/dev/dri/card2",
-        ];
+        let paths = ["/dev/dri/card0", "/dev/dri/card1", "/dev/dri/card2"];
 
         for path in &paths {
             if let Ok(file) = OpenOptions::new().read(true).write(true).open(path) {
@@ -236,9 +240,10 @@ impl DisplayManager {
 
     #[cfg(feature = "display-management")]
     fn enumerate_drm_connectors(&mut self, device: &drm::Device) -> Result<()> {
-        use drm::control::{connector, Mode};
+        use drm::control::{Mode, connector};
 
-        let resources = device.resource_handles()
+        let resources = device
+            .resource_handles()
             .map_err(|e| anyhow!("Failed to get DRM resources: {}", e))?;
 
         for &connector_id in resources.connectors() {
@@ -255,7 +260,8 @@ impl DisplayManager {
 
     #[cfg(feature = "display-management")]
     fn create_display_from_connector(&self, connector: &connector::Info) -> Result<Display> {
-        let connector_name = format!("{}-{}",
+        let connector_name = format!(
+            "{}-{}",
             self.connector_type_name(connector.connector_type()),
             connector.connector_type_id()
         );
@@ -263,7 +269,10 @@ impl DisplayManager {
         // Get available modes (resolutions and refresh rates)
         let modes = connector.modes();
         let mut refresh_rates = Vec::new();
-        let mut max_resolution = Resolution { width: 0, height: 0 };
+        let mut max_resolution = Resolution {
+            width: 0,
+            height: 0,
+        };
 
         for mode in modes {
             let refresh_rate = self.calculate_refresh_rate(mode);
@@ -294,10 +303,10 @@ impl DisplayManager {
             current_refresh_rate: refresh_rates.first().copied().unwrap_or(60),
             vrr_capable,
             vrr_enabled: false,
-            hdr_capable: false, // TODO: Detect HDR capability
+            hdr_capable: self.detect_hdr_capability(&display_id),
             hdr_enabled: false,
             connected: true,
-            primary: false, // TODO: Detect primary display
+            primary: self.detect_primary_display(&display_id),
             position: Position { x: 0, y: 0 },
             rotation: Rotation::Normal,
             scaling: 1.0,
@@ -307,6 +316,7 @@ impl DisplayManager {
         })
     }
 
+    #[cfg(feature = "display-management")]
     fn connector_type_name(&self, connector_type: connector::Type) -> &'static str {
         match connector_type {
             connector::Type::HDMIA => "HDMI",
@@ -318,6 +328,11 @@ impl DisplayManager {
             connector::Type::eDP => "eDP",
             _ => "Unknown",
         }
+    }
+
+    #[cfg(not(feature = "display-management"))]
+    fn connector_type_name(&self, _connector_type: u32) -> &'static str {
+        "Unknown"
     }
 
     #[cfg(feature = "display-management")]
@@ -369,7 +384,13 @@ impl DisplayManager {
                         model: "Unknown".to_string(),
                     });
                 }
-            } else if line.trim().chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            } else if line
+                .trim()
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+            {
                 // Parse available modes
                 if let Some(ref mut display) = current_display {
                     self.parse_xrandr_mode_line(line, display);
@@ -382,8 +403,12 @@ impl DisplayManager {
         }
 
         // Check for VRR support on each display
-        for display in &mut self.displays {
-            display.vrr_capable = self.check_vrr_capability(&display.id)?;
+        let display_ids: Vec<String> = self.displays.iter().map(|d| d.id.clone()).collect();
+        for id in display_ids {
+            let vrr_capable = self.check_vrr_capability(&id)?;
+            if let Some(display) = self.displays.iter_mut().find(|d| d.id == id) {
+                display.vrr_capable = vrr_capable;
+            }
         }
 
         Ok(())
@@ -427,7 +452,9 @@ impl DisplayManager {
         // Parse resolution
         let res_parts: Vec<&str> = parts[0].split('x').collect();
         if res_parts.len() == 2 {
-            if let (Ok(width), Ok(height)) = (res_parts[0].parse::<u32>(), res_parts[1].parse::<u32>()) {
+            if let (Ok(width), Ok(height)) =
+                (res_parts[0].parse::<u32>(), res_parts[1].parse::<u32>())
+            {
                 // Look for refresh rates
                 for part in &parts[1..] {
                     if let Some(rate_str) = part.strip_suffix('*') {
@@ -459,7 +486,8 @@ impl DisplayManager {
         // Check for NVIDIA G-Sync
         if let Ok(output) = Command::new("nvidia-settings")
             .args(&["-q", &format!("[gpu:0]/GPUAdaptiveSync")])
-            .output() {
+            .output()
+        {
             if output.status.success() {
                 let output_str = String::from_utf8_lossy(&output.stdout);
                 if output_str.contains("1") {
@@ -471,17 +499,17 @@ impl DisplayManager {
         // Check for AMD FreeSync via DRM properties
         if let Ok(output) = Command::new("cat")
             .arg(&format!("/sys/class/drm/{}/vrr_capable", display_id))
-            .output() {
+            .output()
+        {
             if output.status.success() {
-                let output_str = String::from_utf8_lossy(&output.stdout).trim();
-                return Ok(output_str == "1");
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                let trimmed = output_str.trim();
+                return Ok(trimmed == "1");
             }
         }
 
         // Check via xrandr properties
-        if let Ok(output) = Command::new("xrandr")
-            .args(&["--prop"])
-            .output() {
+        if let Ok(output) = Command::new("xrandr").args(&["--prop"]).output() {
             let output_str = String::from_utf8_lossy(&output.stdout);
             return Ok(output_str.contains("vrr") || output_str.contains("Variable refresh"));
         }
@@ -493,50 +521,62 @@ impl DisplayManager {
         // Gaming profile with VRR enabled
         let mut gaming_displays = HashMap::new();
         for display in &self.displays {
-            gaming_displays.insert(display.id.clone(), DisplayConfig {
-                resolution: display.resolution.clone(),
-                refresh_rate: *display.refresh_rates.first().unwrap_or(&60),
-                vrr_enabled: display.vrr_capable,
-                hdr_enabled: false,
-                position: display.position.clone(),
-                rotation: display.rotation.clone(),
-                scaling: 1.0,
-                primary: display.primary,
-            });
+            gaming_displays.insert(
+                display.id.clone(),
+                DisplayConfig {
+                    resolution: display.resolution.clone(),
+                    refresh_rate: *display.refresh_rates.first().unwrap_or(&60),
+                    vrr_enabled: display.vrr_capable,
+                    hdr_enabled: false,
+                    position: display.position.clone(),
+                    rotation: display.rotation.clone(),
+                    scaling: 1.0,
+                    primary: display.primary,
+                },
+            );
         }
 
-        self.profiles.insert("Gaming".to_string(), DisplayProfile {
-            name: "Gaming".to_string(),
-            description: "Optimized for gaming with VRR enabled".to_string(),
-            displays: gaming_displays,
-            gaming_optimized: true,
-            vrr_mode: VrrMode::Auto,
-            latency_reduction: true,
-        });
+        self.profiles.insert(
+            "Gaming".to_string(),
+            DisplayProfile {
+                name: "Gaming".to_string(),
+                description: "Optimized for gaming with VRR enabled".to_string(),
+                displays: gaming_displays,
+                gaming_optimized: true,
+                vrr_mode: VrrMode::Auto,
+                latency_reduction: true,
+            },
+        );
 
         // Productivity profile
         let mut productivity_displays = HashMap::new();
         for display in &self.displays {
-            productivity_displays.insert(display.id.clone(), DisplayConfig {
-                resolution: display.resolution.clone(),
-                refresh_rate: 60, // Standard refresh rate for productivity
-                vrr_enabled: false,
-                hdr_enabled: false,
-                position: display.position.clone(),
-                rotation: display.rotation.clone(),
-                scaling: display.scaling,
-                primary: display.primary,
-            });
+            productivity_displays.insert(
+                display.id.clone(),
+                DisplayConfig {
+                    resolution: display.resolution.clone(),
+                    refresh_rate: 60, // Standard refresh rate for productivity
+                    vrr_enabled: false,
+                    hdr_enabled: false,
+                    position: display.position.clone(),
+                    rotation: display.rotation.clone(),
+                    scaling: display.scaling,
+                    primary: display.primary,
+                },
+            );
         }
 
-        self.profiles.insert("Productivity".to_string(), DisplayProfile {
-            name: "Productivity".to_string(),
-            description: "Standard settings for productivity work".to_string(),
-            displays: productivity_displays,
-            gaming_optimized: false,
-            vrr_mode: VrrMode::Disabled,
-            latency_reduction: false,
-        });
+        self.profiles.insert(
+            "Productivity".to_string(),
+            DisplayProfile {
+                name: "Productivity".to_string(),
+                description: "Standard settings for productivity work".to_string(),
+                displays: productivity_displays,
+                gaming_optimized: false,
+                vrr_mode: VrrMode::Disabled,
+                latency_reduction: false,
+            },
+        );
     }
 
     pub fn get_displays(&self) -> &[Display] {
@@ -548,7 +588,9 @@ impl DisplayManager {
     }
 
     pub fn apply_profile(&mut self, profile_name: &str) -> Result<()> {
-        let profile = self.profiles.get(profile_name)
+        let profile = self
+            .profiles
+            .get(profile_name)
             .ok_or_else(|| anyhow!("Profile '{}' not found", profile_name))?
             .clone();
 
@@ -581,12 +623,17 @@ impl DisplayManager {
         // For wlroots-based compositors (sway, etc.)
         if let Ok(_) = Command::new("swaymsg")
             .args(&[
-                "output", display_id,
-                "resolution", &format!("{}x{}", config.resolution.width, config.resolution.height),
-                "rate", &format!("{}Hz", config.refresh_rate),
-                "position", &format!("{},{}", config.position.x, config.position.y),
+                "output",
+                display_id,
+                "resolution",
+                &format!("{}x{}", config.resolution.width, config.resolution.height),
+                "rate",
+                &format!("{}Hz", config.refresh_rate),
+                "position",
+                &format!("{},{}", config.position.x, config.position.y),
             ])
-            .status() {
+            .status()
+        {
             println!("Applied Sway configuration for {}", display_id);
         }
 
@@ -605,11 +652,16 @@ impl DisplayManager {
 
         for (display_id, config) in &profile.displays {
             xrandr_cmd.args(&[
-                "--output", display_id,
-                "--mode", &format!("{}x{}", config.resolution.width, config.resolution.height),
-                "--rate", &config.refresh_rate.to_string(),
-                "--pos", &format!("{}x{}", config.position.x, config.position.y),
-                "--scale", &config.scaling.to_string(),
+                "--output",
+                display_id,
+                "--mode",
+                &format!("{}x{}", config.resolution.width, config.resolution.height),
+                "--rate",
+                &config.refresh_rate.to_string(),
+                "--pos",
+                &format!("{}x{}", config.position.x, config.position.y),
+                "--scale",
+                &config.scaling.to_string(),
             ]);
 
             if config.primary {
@@ -617,17 +669,27 @@ impl DisplayManager {
             }
 
             match config.rotation {
-                Rotation::Left => { xrandr_cmd.args(&["--rotate", "left"]); }
-                Rotation::Right => { xrandr_cmd.args(&["--rotate", "right"]); }
-                Rotation::Inverted => { xrandr_cmd.args(&["--rotate", "inverted"]); }
-                Rotation::Normal => { xrandr_cmd.args(&["--rotate", "normal"]); }
+                Rotation::Left => {
+                    xrandr_cmd.args(&["--rotate", "left"]);
+                }
+                Rotation::Right => {
+                    xrandr_cmd.args(&["--rotate", "right"]);
+                }
+                Rotation::Inverted => {
+                    xrandr_cmd.args(&["--rotate", "inverted"]);
+                }
+                Rotation::Normal => {
+                    xrandr_cmd.args(&["--rotate", "normal"]);
+                }
             }
         }
 
         let output = xrandr_cmd.output()?;
         if !output.status.success() {
-            return Err(anyhow!("Failed to apply X11 display configuration: {}",
-                String::from_utf8_lossy(&output.stderr)));
+            return Err(anyhow!(
+                "Failed to apply X11 display configuration: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
 
         // Apply VRR settings
@@ -658,7 +720,8 @@ impl DisplayManager {
         // Try NVIDIA method first
         if let Ok(_) = Command::new("nvidia-settings")
             .args(&["-a", &format!("[gpu:0]/GPUAdaptiveSync=1")])
-            .status() {
+            .status()
+        {
             println!("Enabled NVIDIA G-Sync for {}", display_id);
             return Ok(());
         }
@@ -697,16 +760,26 @@ impl DisplayManager {
     pub fn optimize_for_gaming(&mut self, target_fps: u32) -> Result<()> {
         println!("Optimizing displays for gaming (target: {}fps)", target_fps);
 
-        for display in &mut self.displays {
-            if display.connected {
-                // Find the best refresh rate for the target FPS
+        // Collect display info to avoid borrowing issues
+        let display_updates: Vec<(usize, u32)> = self
+            .displays
+            .iter()
+            .enumerate()
+            .filter(|(_, display)| display.connected)
+            .map(|(i, display)| {
                 let best_rate = self.find_optimal_refresh_rate(&display.refresh_rates, target_fps);
-                display.current_refresh_rate = best_rate;
+                (i, best_rate)
+            })
+            .collect();
 
-                // Enable VRR if capable
-                if display.vrr_capable {
-                    display.vrr_enabled = true;
-                }
+        // Apply updates
+        for (i, best_rate) in display_updates {
+            let display = &mut self.displays[i];
+            display.current_refresh_rate = best_rate;
+
+            // Enable VRR if capable
+            if display.vrr_capable {
+                display.vrr_enabled = true;
             }
         }
 
@@ -745,6 +818,139 @@ impl DisplayManager {
 
     pub fn is_wayland_session(&self) -> bool {
         self.wayland_session
+    }
+
+    /// Detect if display supports HDR (High Dynamic Range)
+    fn detect_hdr_capability(&self, display_id: &str) -> bool {
+        // Check for HDR capability via DRM properties
+        if let Ok(output) = Command::new("cat")
+            .arg(&format!(
+                "/sys/class/drm/{}/hdr_output_metadata",
+                display_id
+            ))
+            .output()
+        {
+            if output.status.success() && !output.stdout.is_empty() {
+                return true;
+            }
+        }
+
+        // Check for HDR10 support via EDID parsing
+        if let Ok(output) = Command::new("cat")
+            .arg(&format!("/sys/class/drm/{}/edid", display_id))
+            .output()
+        {
+            if output.status.success() {
+                // Look for HDR static metadata in EDID
+                let edid_data = &output.stdout;
+                // HDR static metadata is indicated by specific EDID extension blocks
+                for chunk in edid_data.chunks(128) {
+                    if chunk.len() >= 128 {
+                        // Check for CEA-861 extension with HDR static metadata
+                        if chunk[0] == 0x02 && chunk.len() > 4 {
+                            // Look for HDR static metadata data block (tag 0x06)
+                            if chunk.windows(2).any(|w| w[0] == 0x06) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check via xrandr properties
+        if let Ok(output) = Command::new("xrandr")
+            .args(&["--verbose", "--output", display_id])
+            .output()
+        {
+            if output.status.success() {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                // Look for HDR-related properties
+                if output_str.contains("HDR_OUTPUT_METADATA")
+                    || output_str.contains("max_bpc")
+                    || output_str.contains("Colorspace")
+                {
+                    // Additional checks for actual HDR capability
+                    if output_str.contains("10") || output_str.contains("12") {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Check for AMD FreeSync Premium Pro (includes HDR)
+        if let Ok(output) = Command::new("cat")
+            .arg(&format!("/sys/class/drm/{}/vrr_capable", display_id))
+            .output()
+        {
+            if output.status.success() {
+                let vrr_info = String::from_utf8_lossy(&output.stdout);
+                if vrr_info.contains("2") {
+                    // Advanced VRR with HDR
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Detect if display is the primary display
+    fn detect_primary_display(&self, display_id: &str) -> bool {
+        // Check via xrandr for primary flag
+        if let Ok(output) = Command::new("xrandr").arg("--query").output() {
+            if output.status.success() {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                for line in output_str.lines() {
+                    if line.contains(display_id) && line.contains("primary") {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Check via DRM for primary display (usually the first connected display)
+        if let Ok(entries) = std::fs::read_dir("/sys/class/drm/") {
+            let mut connected_displays = Vec::new();
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let name = entry.file_name();
+                    if let Some(name_str) = name.to_str() {
+                        if name_str.starts_with("card") && name_str.contains('-') {
+                            // Check if connected
+                            let status_path = entry.path().join("status");
+                            if let Ok(status) = std::fs::read_to_string(&status_path) {
+                                if status.trim() == "connected" {
+                                    connected_displays.push(name_str.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort and check if this is the first connected display
+            connected_displays.sort();
+            if let Some(first_display) = connected_displays.first() {
+                return first_display == display_id;
+            }
+        }
+
+        // Fallback: check if this display has position (0,0)
+        if let Ok(output) = Command::new("xrandr").arg("--verbose").output() {
+            if output.status.success() {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                for line in output_str.lines() {
+                    if line.contains(display_id)
+                        && (line.contains("+0+0") || line.contains(" 0x0+0+0"))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
     }
 }
 

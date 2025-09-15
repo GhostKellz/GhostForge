@@ -1,19 +1,22 @@
+mod bolt_integration;
 mod cli;
 mod config;
+mod container;
+mod display;
+mod error;
 mod game;
 mod game_launcher;
-mod wine;
-mod launcher;
-mod utils;
-mod error;
-mod winetricks;
 mod graphics;
-mod prefix;
-mod protondb;
-mod container;
-mod performance;
 #[cfg(feature = "gui")]
 mod gui;
+mod launcher;
+mod performance;
+mod prefix;
+mod protondb;
+mod utils;
+mod vrr_monitor;
+mod wine;
+mod winetricks;
 
 use anyhow::Result;
 use clap::Parser;

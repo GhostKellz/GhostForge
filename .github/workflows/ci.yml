@@ -1,0 +1,201 @@
+name: GhostForge CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: [self-hosted, nv-prometheus]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Check formatting
+      run: cargo fmt -- --check
+
+    - name: Run Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Run tests
+      run: cargo test --verbose --all-features
+
+    - name: Build release
+      run: cargo build --release --all-features
+
+    - name: Run integration tests
+      run: |
+        # Test CLI functionality
+        ./target/release/forge --help
+        ./target/release/forge --version
+        ./target/release/forge info --full
+
+  security-audit:
+    runs-on: [self-hosted, nv-prometheus]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit --force
+
+    - name: Run security audit
+      run: cargo audit
+
+  benchmark:
+    runs-on: [self-hosted, nv-prometheus]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-bench-
+          ${{ runner.os }}-cargo-
+
+    - name: Run benchmarks
+      run: |
+        # Install criterion if we had benchmarks
+        # cargo bench --all-features
+        echo "Benchmarks would run here when implemented"
+
+  docker:
+    runs-on: [self-hosted, nv-prometheus]
+    needs: [test, security-audit]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: |
+        # Create Dockerfile for GhostForge
+        cat > Dockerfile << 'EOF'
+        FROM ubuntu:22.04
+
+        # Install dependencies
+        RUN apt-get update && apt-get install -y \
+            curl \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            wine \
+            winetricks \
+            xvfb \
+            && rm -rf /var/lib/apt/lists/*
+
+        # Install Rust
+        RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        ENV PATH="/root/.cargo/bin:${PATH}"
+
+        # Copy source and build
+        COPY . /app
+        WORKDIR /app
+        RUN cargo build --release
+
+        # Set entrypoint
+        ENTRYPOINT ["/app/target/release/forge"]
+        EOF
+
+        docker build -t ghostforge:latest .
+        docker tag ghostforge:latest ghostforge:$(git rev-parse --short HEAD)
+
+    - name: Test Docker image
+      run: |
+        docker run --rm ghostforge:latest --version
+        docker run --rm ghostforge:latest --help
+
+  release:
+    runs-on: [self-hosted, nv-prometheus]
+    needs: [test, security-audit, docker]
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-release-
+          ${{ runner.os }}-cargo-
+
+    - name: Build release binaries
+      run: |
+        # Build for multiple targets
+        cargo build --release --all-features
+
+        # Create release directory
+        mkdir -p release
+
+        # Copy binary and create archive
+        cp target/release/forge release/
+        tar -czf ghostforge-${{ github.ref_name }}-linux-x86_64.tar.gz -C release forge
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          ghostforge-${{ github.ref_name }}-linux-x86_64.tar.gz
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body: |
+          ## What's Changed in ${{ github.ref_name }}
+
+          🎮 **Gaming Features:**
+          - Battle.net launcher integration with Wine optimizations
+          - Zen 3D V-Cache CPU optimizations for gaming performance
+          - HDR and primary display detection
+          - Real-time system metrics and container monitoring
+
+          🔧 **Technical Improvements:**
+          - Fixed compilation issues and improved stability
+          - Enhanced Bolt container runtime integration
+          - Better error handling and user experience
+
+          📦 **Installation:**
+          ```bash
+          # Download and install
+          tar -xzf ghostforge-${{ github.ref_name }}-linux-x86_64.tar.gz
+          sudo mv forge /usr/local/bin/
+          forge --version
+          ```
+
+          **Full Changelog**: https://github.com/ghostforge/ghostforge/compare/v0.0.1...${{ github.ref_name }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

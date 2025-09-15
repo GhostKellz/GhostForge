@@ -1,0 +1,39 @@
+repos:
+  - repo: local
+    hooks:
+      - id: fmt
+        name: Format Rust code
+        entry: cargo fmt --
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      - id: clippy
+        name: Lint Rust code
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        files: \.rs$
+        pass_filenames: false
+
+      - id: test
+        name: Test Rust code
+        entry: cargo test --all-features
+        language: system
+        files: \.rs$
+        pass_filenames: false
+        stages: [commit]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.17.2
+    hooks:
+      - id: typos

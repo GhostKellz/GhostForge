@@ -3,7 +3,7 @@
 name = "ghostforge"
 version = "0.1.0"
 edition = "2024"
-authors = ["GhostForge Team <team@ghostforge.dev>"]
+authors = ["GhostKellz <ckelley@ghostkellz.sh>"]
 description = "Next-generation Linux gaming platform - Better than Lutris with containers and AI"
 homepage = "https://ghostforge.dev"
 repository = "https://github.com/ghostforge/ghostforge"
@@ -53,7 +53,7 @@ crossterm = "0.28"
 # Container support
 bollard = { version = "0.16", optional = true }  # Docker API
 podman-api = { version = "0.10", optional = true }  # Podman API
-bolt = { git = "https://github.com/CK-Technology/bolt", optional = true }  # Bolt gaming containers
+bolt = { git = "https://github.com/CK-Technology/bolt.git", optional = true }  # Bolt gaming containers
 
 # Authentication
 jsonwebtoken = { version = "9.0", optional = true }
@@ -73,7 +73,7 @@ wayland-client = { version = "0.31", optional = true }
 wayland-protocols = { version = "0.31", optional = true }
 smithay-client-toolkit = { version = "0.18", optional = true }
 drm = { version = "0.11", optional = true }
-libdrm-sys = { version = "0.7", optional = true }
+libdrm-sys = { version = "0.2", optional = true }
 
 [features]
 default = ["cli", "gui", "container-bolt"]

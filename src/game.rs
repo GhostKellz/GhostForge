@@ -1,8 +1,8 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use rusqlite::{Connection, params, OptionalExtension};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Game {
@@ -41,7 +41,7 @@ pub struct GameSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WineSettings {
     pub wine_version: String,
-    pub wine_arch: String, // win32 or win64
+    pub wine_arch: String,       // win32 or win64
     pub windows_version: String, // win10, win7, winxp
     pub prefix_path: PathBuf,
     pub enable_dxvk: bool,
@@ -63,7 +63,7 @@ pub struct GraphicsSettings {
     pub enable_gamemode: bool,
     pub enable_gamescope: bool,
     pub gamescope_options: Option<String>,
-    pub prime_run: bool, // NVIDIA Optimus
+    pub prime_run: bool,       // NVIDIA Optimus
     pub dri_prime: Option<u8>, // AMD hybrid graphics
 }
 
@@ -175,46 +175,54 @@ impl GameLibrary {
     }
 
     pub fn get_game(&self, id: &str) -> Result<Option<Game>> {
-        let mut stmt = self.connection.prepare(
-            "SELECT * FROM games WHERE id = ?1"
-        )?;
+        let mut stmt = self
+            .connection
+            .prepare("SELECT * FROM games WHERE id = ?1")?;
 
-        let game = stmt.query_row([id], |row| {
-            Ok(Game {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                executable: PathBuf::from(row.get::<_, String>(2)?),
-                install_path: PathBuf::from(row.get::<_, String>(3)?),
-                launcher: row.get(4)?,
-                launcher_id: row.get(5)?,
-                wine_version: row.get(6)?,
-                wine_prefix: row.get::<_, Option<String>>(7)?.map(PathBuf::from),
-                icon: row.get::<_, Option<String>>(8)?.map(PathBuf::from),
-                banner: row.get::<_, Option<String>>(9)?.map(PathBuf::from),
-                launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?).unwrap_or_default(),
-                environment_variables: serde_json::from_str(&row.get::<_, String>(11)?).unwrap_or_default(),
-                pre_launch_script: row.get(12)?,
-                post_launch_script: row.get(13)?,
-                categories: serde_json::from_str(&row.get::<_, String>(14)?).unwrap_or_default(),
-                tags: serde_json::from_str(&row.get::<_, String>(15)?).unwrap_or_default(),
-                playtime_minutes: row.get(16)?,
-                last_played: row.get::<_, Option<String>>(17)?
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc)),
-                installed_date: DateTime::parse_from_rfc3339(&row.get::<_, String>(18)?)
-                    .unwrap()
-                    .with_timezone(&Utc),
-                favorite: row.get(19)?,
-                hidden: row.get(20)?,
-                notes: row.get(21)?,
+        let game = stmt
+            .query_row([id], |row| {
+                Ok(Game {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    executable: PathBuf::from(row.get::<_, String>(2)?),
+                    install_path: PathBuf::from(row.get::<_, String>(3)?),
+                    launcher: row.get(4)?,
+                    launcher_id: row.get(5)?,
+                    wine_version: row.get(6)?,
+                    wine_prefix: row.get::<_, Option<String>>(7)?.map(PathBuf::from),
+                    icon: row.get::<_, Option<String>>(8)?.map(PathBuf::from),
+                    banner: row.get::<_, Option<String>>(9)?.map(PathBuf::from),
+                    launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?)
+                        .unwrap_or_default(),
+                    environment_variables: serde_json::from_str(&row.get::<_, String>(11)?)
+                        .unwrap_or_default(),
+                    pre_launch_script: row.get(12)?,
+                    post_launch_script: row.get(13)?,
+                    categories: serde_json::from_str(&row.get::<_, String>(14)?)
+                        .unwrap_or_default(),
+                    tags: serde_json::from_str(&row.get::<_, String>(15)?).unwrap_or_default(),
+                    playtime_minutes: row.get(16)?,
+                    last_played: row
+                        .get::<_, Option<String>>(17)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    installed_date: DateTime::parse_from_rfc3339(&row.get::<_, String>(18)?)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    favorite: row.get(19)?,
+                    hidden: row.get(20)?,
+                    notes: row.get(21)?,
+                })
             })
-        }).optional()?;
+            .optional()?;
 
         Ok(game)
     }
 
     pub fn list_games(&self) -> Result<Vec<Game>> {
-        let mut stmt = self.connection.prepare("SELECT * FROM games WHERE hidden = 0")?;
+        let mut stmt = self
+            .connection
+            .prepare("SELECT * FROM games WHERE hidden = 0")?;
 
         let games = stmt.query_map([], |row| {
             Ok(Game {
@@ -228,14 +236,17 @@ impl GameLibrary {
                 wine_prefix: row.get::<_, Option<String>>(7)?.map(PathBuf::from),
                 icon: row.get::<_, Option<String>>(8)?.map(PathBuf::from),
                 banner: row.get::<_, Option<String>>(9)?.map(PathBuf::from),
-                launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?).unwrap_or_default(),
-                environment_variables: serde_json::from_str(&row.get::<_, String>(11)?).unwrap_or_default(),
+                launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?)
+                    .unwrap_or_default(),
+                environment_variables: serde_json::from_str(&row.get::<_, String>(11)?)
+                    .unwrap_or_default(),
                 pre_launch_script: row.get(12)?,
                 post_launch_script: row.get(13)?,
                 categories: serde_json::from_str(&row.get::<_, String>(14)?).unwrap_or_default(),
                 tags: serde_json::from_str(&row.get::<_, String>(15)?).unwrap_or_default(),
                 playtime_minutes: row.get(16)?,
-                last_played: row.get::<_, Option<String>>(17)?
+                last_played: row
+                    .get::<_, Option<String>>(17)?
                     .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                     .map(|dt| dt.with_timezone(&Utc)),
                 installed_date: DateTime::parse_from_rfc3339(&row.get::<_, String>(18)?)
@@ -247,7 +258,9 @@ impl GameLibrary {
             })
         })?;
 
-        games.collect::<Result<Vec<_>, _>>().map_err(anyhow::Error::from)
+        games
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(anyhow::Error::from)
     }
 
     pub fn update_game(&self, game: &Game) -> Result<()> {
@@ -308,7 +321,8 @@ impl GameLibrary {
     }
 
     pub fn remove_game(&self, id: &str) -> Result<()> {
-        self.connection.execute("DELETE FROM games WHERE id = ?1", [id])?;
+        self.connection
+            .execute("DELETE FROM games WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -317,7 +331,7 @@ impl GameLibrary {
         let mut stmt = self.connection.prepare(
             "SELECT * FROM games WHERE
             (name LIKE ?1 OR tags LIKE ?1 OR categories LIKE ?1 OR notes LIKE ?1)
-            AND hidden = 0"
+            AND hidden = 0",
         )?;
 
         let games = stmt.query_map([pattern], |row| {
@@ -332,14 +346,17 @@ impl GameLibrary {
                 wine_prefix: row.get::<_, Option<String>>(7)?.map(PathBuf::from),
                 icon: row.get::<_, Option<String>>(8)?.map(PathBuf::from),
                 banner: row.get::<_, Option<String>>(9)?.map(PathBuf::from),
-                launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?).unwrap_or_default(),
-                environment_variables: serde_json::from_str(&row.get::<_, String>(11)?).unwrap_or_default(),
+                launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?)
+                    .unwrap_or_default(),
+                environment_variables: serde_json::from_str(&row.get::<_, String>(11)?)
+                    .unwrap_or_default(),
                 pre_launch_script: row.get(12)?,
                 post_launch_script: row.get(13)?,
                 categories: serde_json::from_str(&row.get::<_, String>(14)?).unwrap_or_default(),
                 tags: serde_json::from_str(&row.get::<_, String>(15)?).unwrap_or_default(),
                 playtime_minutes: row.get(16)?,
-                last_played: row.get::<_, Option<String>>(17)?
+                last_played: row
+                    .get::<_, Option<String>>(17)?
                     .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                     .map(|dt| dt.with_timezone(&Utc)),
                 installed_date: DateTime::parse_from_rfc3339(&row.get::<_, String>(18)?)
@@ -351,11 +368,14 @@ impl GameLibrary {
             })
         })?;
 
-        games.collect::<Result<Vec<_>, _>>().map_err(anyhow::Error::from)
+        games
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(anyhow::Error::from)
     }
 
     pub fn delete_game(&self, id: &str) -> Result<()> {
-        self.connection.execute("DELETE FROM games WHERE id = ?1", [id])?;
+        self.connection
+            .execute("DELETE FROM games WHERE id = ?1", [id])?;
         Ok(())
     }
 
@@ -368,77 +388,92 @@ impl GameLibrary {
     }
 
     pub fn get_games_by_launcher(&self, launcher: &str) -> Result<Vec<Game>> {
-        let mut stmt = self.connection.prepare("SELECT * FROM games WHERE launcher = ?1 AND hidden = 0")?;
+        let mut stmt = self
+            .connection
+            .prepare("SELECT * FROM games WHERE launcher = ?1 AND hidden = 0")?;
 
-        let games = stmt.query_map([launcher], |row| {
-            Ok(Game {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                executable: PathBuf::from(row.get::<_, String>(2)?),
-                install_path: PathBuf::from(row.get::<_, String>(3)?),
-                launcher: row.get(4)?,
-                launcher_id: row.get(5)?,
-                wine_version: row.get(6)?,
-                wine_prefix: row.get::<_, Option<String>>(7)?.map(PathBuf::from),
-                icon: row.get::<_, Option<String>>(8)?.map(PathBuf::from),
-                banner: row.get::<_, Option<String>>(9)?.map(PathBuf::from),
-                launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?).unwrap_or_default(),
-                environment_variables: serde_json::from_str(&row.get::<_, String>(11)?).unwrap_or_default(),
-                pre_launch_script: row.get(12)?,
-                post_launch_script: row.get(13)?,
-                categories: serde_json::from_str(&row.get::<_, String>(14)?).unwrap_or_default(),
-                tags: serde_json::from_str(&row.get::<_, String>(15)?).unwrap_or_default(),
-                playtime_minutes: row.get(16)?,
-                last_played: row.get::<_, Option<String>>(17)?
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc)),
-                installed_date: DateTime::parse_from_rfc3339(&row.get::<_, String>(18)?)
-                    .unwrap()
-                    .with_timezone(&Utc),
-                favorite: row.get(19)?,
-                hidden: row.get(20)?,
-                notes: row.get(21)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let games = stmt
+            .query_map([launcher], |row| {
+                Ok(Game {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    executable: PathBuf::from(row.get::<_, String>(2)?),
+                    install_path: PathBuf::from(row.get::<_, String>(3)?),
+                    launcher: row.get(4)?,
+                    launcher_id: row.get(5)?,
+                    wine_version: row.get(6)?,
+                    wine_prefix: row.get::<_, Option<String>>(7)?.map(PathBuf::from),
+                    icon: row.get::<_, Option<String>>(8)?.map(PathBuf::from),
+                    banner: row.get::<_, Option<String>>(9)?.map(PathBuf::from),
+                    launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?)
+                        .unwrap_or_default(),
+                    environment_variables: serde_json::from_str(&row.get::<_, String>(11)?)
+                        .unwrap_or_default(),
+                    pre_launch_script: row.get(12)?,
+                    post_launch_script: row.get(13)?,
+                    categories: serde_json::from_str(&row.get::<_, String>(14)?)
+                        .unwrap_or_default(),
+                    tags: serde_json::from_str(&row.get::<_, String>(15)?).unwrap_or_default(),
+                    playtime_minutes: row.get(16)?,
+                    last_played: row
+                        .get::<_, Option<String>>(17)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    installed_date: DateTime::parse_from_rfc3339(&row.get::<_, String>(18)?)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    favorite: row.get(19)?,
+                    hidden: row.get(20)?,
+                    notes: row.get(21)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(games)
     }
 
     pub fn get_favorites(&self) -> Result<Vec<Game>> {
-        let mut stmt = self.connection.prepare("SELECT * FROM games WHERE favorite = 1 AND hidden = 0 ORDER BY last_played DESC")?;
+        let mut stmt = self.connection.prepare(
+            "SELECT * FROM games WHERE favorite = 1 AND hidden = 0 ORDER BY last_played DESC",
+        )?;
 
-        let games = stmt.query_map([], |row| {
-            Ok(Game {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                executable: PathBuf::from(row.get::<_, String>(2)?),
-                install_path: PathBuf::from(row.get::<_, String>(3)?),
-                launcher: row.get(4)?,
-                launcher_id: row.get(5)?,
-                wine_version: row.get(6)?,
-                wine_prefix: row.get::<_, Option<String>>(7)?.map(PathBuf::from),
-                icon: row.get::<_, Option<String>>(8)?.map(PathBuf::from),
-                banner: row.get::<_, Option<String>>(9)?.map(PathBuf::from),
-                launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?).unwrap_or_default(),
-                environment_variables: serde_json::from_str(&row.get::<_, String>(11)?).unwrap_or_default(),
-                pre_launch_script: row.get(12)?,
-                post_launch_script: row.get(13)?,
-                categories: serde_json::from_str(&row.get::<_, String>(14)?).unwrap_or_default(),
-                tags: serde_json::from_str(&row.get::<_, String>(15)?).unwrap_or_default(),
-                playtime_minutes: row.get(16)?,
-                last_played: row.get::<_, Option<String>>(17)?
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc)),
-                installed_date: DateTime::parse_from_rfc3339(&row.get::<_, String>(18)?)
-                    .unwrap()
-                    .with_timezone(&Utc),
-                favorite: row.get(19)?,
-                hidden: row.get(20)?,
-                notes: row.get(21)?,
-            })
-        })?.collect::<Result<Vec<_>, _>>()?;
+        let games = stmt
+            .query_map([], |row| {
+                Ok(Game {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    executable: PathBuf::from(row.get::<_, String>(2)?),
+                    install_path: PathBuf::from(row.get::<_, String>(3)?),
+                    launcher: row.get(4)?,
+                    launcher_id: row.get(5)?,
+                    wine_version: row.get(6)?,
+                    wine_prefix: row.get::<_, Option<String>>(7)?.map(PathBuf::from),
+                    icon: row.get::<_, Option<String>>(8)?.map(PathBuf::from),
+                    banner: row.get::<_, Option<String>>(9)?.map(PathBuf::from),
+                    launch_arguments: serde_json::from_str(&row.get::<_, String>(10)?)
+                        .unwrap_or_default(),
+                    environment_variables: serde_json::from_str(&row.get::<_, String>(11)?)
+                        .unwrap_or_default(),
+                    pre_launch_script: row.get(12)?,
+                    post_launch_script: row.get(13)?,
+                    categories: serde_json::from_str(&row.get::<_, String>(14)?)
+                        .unwrap_or_default(),
+                    tags: serde_json::from_str(&row.get::<_, String>(15)?).unwrap_or_default(),
+                    playtime_minutes: row.get(16)?,
+                    last_played: row
+                        .get::<_, Option<String>>(17)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                    installed_date: DateTime::parse_from_rfc3339(&row.get::<_, String>(18)?)
+                        .unwrap()
+                        .with_timezone(&Utc),
+                    favorite: row.get(19)?,
+                    hidden: row.get(20)?,
+                    notes: row.get(21)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(games)
     }
-
 }

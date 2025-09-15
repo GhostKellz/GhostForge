@@ -1,11 +1,11 @@
 use anyhow::Result;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use serde::{Deserialize, Serialize};
-use tokio::process::Command as AsyncCommand;
 use std::sync::{Arc, Mutex};
-use chrono::{DateTime, Utc};
+use tokio::process::Command as AsyncCommand;
 
 #[derive(Debug)]
 pub struct GameLauncher {
@@ -87,7 +87,11 @@ impl GameLauncher {
     }
 
     /// Launch a game with comprehensive environment setup
-    pub async fn launch_game(&self, game: &crate::game::Game, options: LaunchOptions) -> Result<u32> {
+    pub async fn launch_game(
+        &self,
+        game: &crate::game::Game,
+        options: LaunchOptions,
+    ) -> Result<u32> {
         println!("🚀 Launching {}...", game.name);
 
         // Pre-launch script
@@ -121,8 +125,8 @@ impl GameLauncher {
 
         // Launch with proper I/O handling
         cmd.stdin(Stdio::null())
-           .stdout(Stdio::piped())
-           .stderr(Stdio::piped());
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
         // Execute the command
         let mut child = cmd.spawn()?;
@@ -169,7 +173,7 @@ impl GameLauncher {
                             eprintln!("⚠️ Post-launch script failed: {}", e);
                         }
                     }
-                },
+                }
                 Err(e) => {
                     eprintln!("❌ Game {} process error: {}", game_id, e);
                     let mut running_games = running_games_clone.lock().unwrap();
@@ -181,13 +185,21 @@ impl GameLauncher {
         Ok(pid)
     }
 
-    fn determine_launcher_type(&self, game: &crate::game::Game, options: &LaunchOptions) -> LauncherType {
+    fn determine_launcher_type(
+        &self,
+        game: &crate::game::Game,
+        options: &LaunchOptions,
+    ) -> LauncherType {
         if game.launcher.as_deref() == Some("Steam") {
             LauncherType::Steam
         } else if options.wine_version.is_some() || game.wine_version.is_some() {
-            if options.wine_version.as_ref().or(game.wine_version.as_ref())
+            if options
+                .wine_version
+                .as_ref()
+                .or(game.wine_version.as_ref())
                 .map(|v| v.contains("Proton"))
-                .unwrap_or(false) {
+                .unwrap_or(false)
+            {
                 LauncherType::Proton
             } else {
                 LauncherType::Wine
@@ -199,7 +211,11 @@ impl GameLauncher {
         }
     }
 
-    fn build_native_command(&self, game: &crate::game::Game, options: &LaunchOptions) -> Result<AsyncCommand> {
+    fn build_native_command(
+        &self,
+        game: &crate::game::Game,
+        options: &LaunchOptions,
+    ) -> Result<AsyncCommand> {
         let mut cmd = AsyncCommand::new(&game.executable);
 
         // Add game arguments
@@ -218,8 +234,14 @@ impl GameLauncher {
         Ok(cmd)
     }
 
-    async fn build_wine_command(&self, game: &crate::game::Game, options: &LaunchOptions) -> Result<AsyncCommand> {
-        let wine_version = options.wine_version.as_ref()
+    async fn build_wine_command(
+        &self,
+        game: &crate::game::Game,
+        options: &LaunchOptions,
+    ) -> Result<AsyncCommand> {
+        let wine_version = options
+            .wine_version
+            .as_ref()
             .or(game.wine_version.as_ref())
             .cloned()
             .unwrap_or_else(|| "wine".to_string());
@@ -234,7 +256,9 @@ impl GameLauncher {
         let mut cmd = AsyncCommand::new(wine_bin);
 
         // Set Wine prefix
-        let prefix = options.wine_prefix.as_ref()
+        let prefix = options
+            .wine_prefix
+            .as_ref()
             .or(game.wine_prefix.as_ref())
             .cloned()
             .unwrap_or_else(|| {
@@ -276,8 +300,14 @@ impl GameLauncher {
         Ok(cmd)
     }
 
-    async fn build_proton_command(&self, game: &crate::game::Game, options: &LaunchOptions) -> Result<AsyncCommand> {
-        let proton_version = options.wine_version.as_ref()
+    async fn build_proton_command(
+        &self,
+        game: &crate::game::Game,
+        options: &LaunchOptions,
+    ) -> Result<AsyncCommand> {
+        let proton_version = options
+            .wine_version
+            .as_ref()
             .or(game.wine_version.as_ref())
             .cloned()
             .unwrap_or_else(|| "GE-Proton".to_string());
@@ -288,7 +318,9 @@ impl GameLauncher {
         let mut cmd = AsyncCommand::new(proton_bin);
 
         // Set Steam compatibility data
-        let prefix = options.wine_prefix.as_ref()
+        let prefix = options
+            .wine_prefix
+            .as_ref()
             .or(game.wine_prefix.as_ref())
             .cloned()
             .unwrap_or_else(|| {
@@ -332,7 +364,11 @@ impl GameLauncher {
         Ok(cmd)
     }
 
-    fn build_steam_command(&self, game: &crate::game::Game, _options: &LaunchOptions) -> Result<AsyncCommand> {
+    fn build_steam_command(
+        &self,
+        game: &crate::game::Game,
+        _options: &LaunchOptions,
+    ) -> Result<AsyncCommand> {
         let mut cmd = AsyncCommand::new("steam");
 
         if let Some(launcher_id) = &game.launcher_id {
@@ -344,7 +380,11 @@ impl GameLauncher {
         Ok(cmd)
     }
 
-    fn build_custom_command(&self, game: &crate::game::Game, options: &LaunchOptions) -> Result<AsyncCommand> {
+    fn build_custom_command(
+        &self,
+        game: &crate::game::Game,
+        options: &LaunchOptions,
+    ) -> Result<AsyncCommand> {
         // Use the executable directly
         let mut cmd = AsyncCommand::new(&game.executable);
 
@@ -360,7 +400,11 @@ impl GameLauncher {
         Ok(cmd)
     }
 
-    fn wrap_with_performance_tools(&self, cmd: &mut AsyncCommand, options: &LaunchOptions) -> Result<()> {
+    fn wrap_with_performance_tools(
+        &self,
+        cmd: &mut AsyncCommand,
+        options: &LaunchOptions,
+    ) -> Result<()> {
         // Build performance wrapper command
         let mut wrapper_parts = Vec::new();
 
@@ -368,7 +412,13 @@ impl GameLauncher {
         if let Some(affinity) = &options.cpu_affinity {
             wrapper_parts.push("taskset".to_string());
             wrapper_parts.push("-c".to_string());
-            wrapper_parts.push(affinity.iter().map(|cpu| cpu.to_string()).collect::<Vec<_>>().join(","));
+            wrapper_parts.push(
+                affinity
+                    .iter()
+                    .map(|cpu| cpu.to_string())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            );
         }
 
         // Nice level
@@ -397,10 +447,11 @@ impl GameLauncher {
                 }
             } else {
                 // Default GameScope options for better gaming
-                wrapper_parts.extend([
-                    "-W", "1920", "-H", "1080",
-                    "-f", "--force-grab-cursor"
-                ].iter().map(|s| s.to_string()));
+                wrapper_parts.extend(
+                    ["-W", "1920", "-H", "1080", "-f", "--force-grab-cursor"]
+                        .iter()
+                        .map(|s| s.to_string()),
+                );
             }
         }
 
@@ -436,7 +487,12 @@ impl GameLauncher {
         }
 
         // Check in wine versions directory
-        let wine_path = self.config.wine.wine_versions_path.join(wine_version).join("bin/wine");
+        let wine_path = self
+            .config
+            .wine
+            .wine_versions_path
+            .join(wine_version)
+            .join("bin/wine");
         if wine_path.exists() {
             return Ok(wine_path);
         }
@@ -447,20 +503,31 @@ impl GameLauncher {
 
     async fn find_proton_binary(&self, proton_version: &str) -> Result<PathBuf> {
         // Check in Proton directory
-        let proton_path = self.config.wine.wine_versions_path.join(proton_version).join("proton");
+        let proton_path = self
+            .config
+            .wine
+            .wine_versions_path
+            .join(proton_version)
+            .join("proton");
         if proton_path.exists() {
             return Ok(proton_path);
         }
 
         // Check Steam Proton locations
         let steam_locations = [
-            dirs::home_dir().unwrap().join(".steam/steam/steamapps/common"),
-            dirs::home_dir().unwrap().join(".local/share/Steam/steamapps/common"),
+            dirs::home_dir()
+                .unwrap()
+                .join(".steam/steam/steamapps/common"),
+            dirs::home_dir()
+                .unwrap()
+                .join(".local/share/Steam/steamapps/common"),
             PathBuf::from("/usr/share/steam/compatibilitytools.d"),
         ];
 
         for location in steam_locations {
-            for entry in std::fs::read_dir(&location).unwrap_or_else(|_| std::fs::read_dir("/tmp").unwrap()) {
+            for entry in
+                std::fs::read_dir(&location).unwrap_or_else(|_| std::fs::read_dir("/tmp").unwrap())
+            {
                 let entry = entry?;
                 let path = entry.path();
                 if path.is_dir() {
@@ -483,9 +550,7 @@ impl GameLauncher {
     }
 
     pub async fn stop_game(&self, game_id: &str) -> Result<()> {
-        let running_game = {
-            self.running_games.lock().unwrap().get(game_id).cloned()
-        };
+        let running_game = { self.running_games.lock().unwrap().get(game_id).cloned() };
 
         if let Some(running_game) = running_game {
             if let Some(pid) = running_game.pid {
@@ -494,7 +559,7 @@ impl GameLauncher {
                 // Try graceful shutdown first
                 if let Ok(_) = nix::sys::signal::kill(
                     nix::unistd::Pid::from_raw(pid as i32),
-                    nix::sys::signal::Signal::SIGTERM
+                    nix::sys::signal::Signal::SIGTERM,
                 ) {
                     // Wait a bit for graceful shutdown
                     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
@@ -503,7 +568,7 @@ impl GameLauncher {
                 // Force kill if still running
                 let _ = nix::sys::signal::kill(
                     nix::unistd::Pid::from_raw(pid as i32),
-                    nix::sys::signal::Signal::SIGKILL
+                    nix::sys::signal::Signal::SIGKILL,
                 );
 
                 // Remove from running games
@@ -526,7 +591,11 @@ impl GameLauncher {
         if status.success() {
             println!("✅ {} script completed successfully", script_type);
         } else {
-            println!("⚠️ {} script exited with code {:?}", script_type, status.code());
+            println!(
+                "⚠️ {} script exited with code {:?}",
+                script_type,
+                status.code()
+            );
         }
 
         Ok(())
@@ -535,22 +604,27 @@ impl GameLauncher {
     fn run_script_blocking(script: &str, script_type: &str) -> Result<()> {
         println!("📜 Running {} script...", script_type);
 
-        let status = Command::new("bash")
-            .arg("-c")
-            .arg(script)
-            .status()?;
+        let status = Command::new("bash").arg("-c").arg(script).status()?;
 
         if status.success() {
             println!("✅ {} script completed successfully", script_type);
         } else {
-            println!("⚠️ {} script exited with code {:?}", script_type, status.code());
+            println!(
+                "⚠️ {} script exited with code {:?}",
+                script_type,
+                status.code()
+            );
         }
 
         Ok(())
     }
 
     /// Update playtime for a game when it stops
-    pub async fn update_game_playtime(&self, game_id: &str, game_lib: &crate::game::GameLibrary) -> Result<()> {
+    pub async fn update_game_playtime(
+        &self,
+        game_id: &str,
+        game_lib: &crate::game::GameLibrary,
+    ) -> Result<()> {
         if let Some(running_game) = self.running_games.lock().unwrap().get(game_id) {
             let playtime_minutes = Utc::now()
                 .signed_duration_since(running_game.start_time)

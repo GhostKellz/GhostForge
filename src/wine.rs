@@ -1,17 +1,17 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use which::which;
+use flate2::read::GzDecoder;
 use futures_util::StreamExt;
+use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 use reqwest;
-use indicatif::{ProgressBar, ProgressStyle};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use tar::Archive;
-use flate2::read::GzDecoder;
+use which::which;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WineVersion {
@@ -85,8 +85,12 @@ impl WineManager {
 
         // Check Proton versions in Steam
         let steam_proton_dirs = vec![
-            dirs::home_dir().unwrap().join(".local/share/Steam/steamapps/common"),
-            dirs::home_dir().unwrap().join(".steam/steam/steamapps/common"),
+            dirs::home_dir()
+                .unwrap()
+                .join(".local/share/Steam/steamapps/common"),
+            dirs::home_dir()
+                .unwrap()
+                .join(".steam/steam/steamapps/common"),
             PathBuf::from("/usr/share/steam/compatibilitytools.d"),
         ];
 
@@ -166,7 +170,9 @@ impl WineManager {
                                     arch: vec!["win64".to_string()],
                                     installed: false,
                                     system: false,
-                                    download_url: asset["browser_download_url"].as_str().map(String::from),
+                                    download_url: asset["browser_download_url"]
+                                        .as_str()
+                                        .map(String::from),
                                     checksum: None,
                                 });
                                 break;
@@ -182,19 +188,17 @@ impl WineManager {
 
     async fn fetch_wine_builds(&self) -> Result<Vec<WineVersion>> {
         // Placeholder for WineHQ builds
-        Ok(vec![
-            WineVersion {
-                name: "Wine Staging 9.18".to_string(),
-                version: "9.18".to_string(),
-                path: self.wine_dir.join("wine-staging-9.18"),
-                wine_type: WineType::WineStaging,
-                arch: vec!["win32".to_string(), "win64".to_string()],
-                installed: false,
-                system: false,
-                download_url: Some("https://dl.winehq.org/wine-builds/".to_string()),
-                checksum: None,
-            },
-        ])
+        Ok(vec![WineVersion {
+            name: "Wine Staging 9.18".to_string(),
+            version: "9.18".to_string(),
+            path: self.wine_dir.join("wine-staging-9.18"),
+            wine_type: WineType::WineStaging,
+            arch: vec!["win32".to_string(), "win64".to_string()],
+            installed: false,
+            system: false,
+            download_url: Some("https://dl.winehq.org/wine-builds/".to_string()),
+            checksum: None,
+        }])
     }
 
     async fn fetch_lutris_wine(&self) -> Result<Vec<WineVersion>> {
@@ -294,7 +298,12 @@ impl WineManager {
         } else if archive_path.to_str().unwrap().ends_with(".tar.xz") {
             // Use system tar for xz files
             Command::new("tar")
-                .args(&["-xf", archive_path.to_str().unwrap(), "-C", destination.to_str().unwrap()])
+                .args(&[
+                    "-xf",
+                    archive_path.to_str().unwrap(),
+                    "-C",
+                    destination.to_str().unwrap(),
+                ])
                 .status()?;
         }
 
@@ -384,9 +393,7 @@ impl WineManager {
     }
 
     fn get_wine_version(&self, wine_path: &Path) -> Result<String> {
-        let output = Command::new(wine_path)
-            .arg("--version")
-            .output()?;
+        let output = Command::new(wine_path).arg("--version").output()?;
 
         let version_str = String::from_utf8_lossy(&output.stdout);
         let re = Regex::new(r"wine-?(\d+\.\d+(?:\.\d+)?)")?;
