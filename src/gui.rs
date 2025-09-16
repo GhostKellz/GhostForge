@@ -2044,7 +2044,7 @@ pub fn run_gui() -> Result<()> {
             .with_inner_size([1200.0, 800.0])
             .with_min_inner_size([800.0, 600.0])
             .with_icon(
-                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon.png")[..])
+                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icons/GhostForge-icon-64.png")[..])
                     .unwrap_or_default(),
             ),
         ..Default::default()
